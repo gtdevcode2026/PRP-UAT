@@ -543,6 +543,27 @@ details.log-details[open] summary { border-bottom: 1px solid var(--hairline-2); 
 .spinner { width: 28px; height: 28px; border: 2px solid rgba(237,201,79,0.15); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner-text { color: var(--tx-mute); font-size: 12.5px; letter-spacing: 0.01em; text-align: center; }
+/* Beer-bottle loader — pure CSS, no external assets (offline safe). Ported from awareness studio. */
+.beer-loader{display:flex;align-items:center;justify-content:center;width:100%;margin:.2rem 0 .7rem}
+.beer-bottle{position:relative;width:44px;height:150px;background:linear-gradient(180deg,rgba(212,164,32,.16),rgba(212,164,32,.09));filter:drop-shadow(0 4px 10px rgba(0,0,0,.5));clip-path:path('M17,6 L17,3 Q17,1 19,1 L25,1 Q27,1 27,3 L27,6 L27,50 C27,62 43,60 43,80 L43,136 C43,146 39,148 33,148 L11,148 C5,148 1,146 1,136 L1,80 C1,60 17,62 17,50 Z')}
+.beer-liquid{position:absolute;left:0;right:0;bottom:0;height:48%;background:linear-gradient(180deg,#D4A420 0%,#C09010 100%);box-shadow:0 -1px 6px rgba(212,164,32,.5) inset}
+.beer-liquid::after{content:"";position:absolute;top:-3px;left:0;right:0;height:5px;background:rgba(255,255,255,.35);border-radius:50%;animation:beerWobble 1.2s ease-in-out infinite}
+.beer-bubble{position:absolute;bottom:3%;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.6);opacity:0;animation:beerBubble .85s ease-in infinite}
+.beer-bubble:nth-child(1){left:22%;animation-delay:0s}
+.beer-bubble:nth-child(2){left:38%;width:4px;height:4px;animation-delay:.14s}
+.beer-bubble:nth-child(3){left:54%;width:6px;height:6px;animation-delay:.28s}
+.beer-bubble:nth-child(4){left:68%;width:4px;height:4px;animation-delay:.42s}
+.beer-bubble:nth-child(5){left:33%;width:5px;height:5px;animation-delay:.56s}
+.beer-loader[data-mode="loop"] .beer-liquid{animation:beerFill 2.2s ease-in-out infinite}
+.beer-loader[data-mode="progress"] .beer-liquid{height:var(--bl-fill,45%);transition:height .3s ease}
+@keyframes beerFill{0%{height:45%}50%{height:90%}100%{height:45%}}
+@keyframes beerWobble{0%,100%{transform:translateX(-2px)}50%{transform:translateX(2px)}}
+@keyframes beerBubble{0%{opacity:0;transform:translateY(0) scale(.5)}12%{opacity:.95}100%{opacity:0;transform:translateY(-62px) scale(1.05)}}
+@media (prefers-reduced-motion:reduce){
+  .beer-loader[data-mode="loop"] .beer-liquid{animation:none;height:60%}
+  .beer-liquid::after,.beer-bubble{animation:none}
+  .beer-bubble{opacity:0}
+}
 .skeleton { margin-top: 8px; }
 .skeleton-bar-block {
   height: 200px; border-radius: 16px; margin-bottom: 18px;
@@ -635,11 +656,12 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 
 <!-- LOADING OVERLAY -->
 <div id="prp-load-overlay" style="position:fixed;inset:0;z-index:99998;background:#000000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:monospace;">
-  <svg id="prp-load-spin" width="34" height="34" viewBox="0 0 34 34" fill="none" style="animation:prp-spin 1s linear infinite;"><circle cx="17" cy="17" r="13" stroke="rgba(237,201,79,0.18)" stroke-width="3"/><path d="M17 4a13 13 0 0 1 13 13" stroke="#e0c040" stroke-width="3" stroke-linecap="round"/></svg>
+  <div id="prp-load-spin" class="beer-loader" data-mode="loop" role="img" aria-label="Loading" style="width:auto;margin:0;">
+    <div class="beer-bottle"><div class="beer-liquid"><span class="beer-bubble"></span><span class="beer-bubble"></span><span class="beer-bubble"></span><span class="beer-bubble"></span><span class="beer-bubble"></span></div></div>
+  </div>
   <div style="color:rgba(255,240,200,0.45);font-size:11px;letter-spacing:0.18em;text-transform:uppercase;">Loading</div>
   <div id="prp-load-err" style="display:none;color:#ff8080;font-size:12px;text-align:center;max-width:420px;padding:0 24px;line-height:1.8;"></div>
 </div>
-<style>@keyframes prp-spin { to { transform:rotate(360deg); } }</style>
 
 <!-- AMBIENT GOLD AURORA -->
 <div class="bg-fx" aria-hidden="true">
@@ -1701,7 +1723,9 @@ function _runLoadingUi(entryLabel) {
     '<span class="preview-meta">generating&hellip;</span>' +
     '</div>' +
     '<div class="spinner-wrap" style="min-height:0;margin-bottom:22px;">' +
-    '<div class="spinner"></div>' +
+    '<div class="beer-loader" data-mode="loop" role="img" aria-label="Running" style="width:auto;margin:0;">' +
+    '<div class="beer-bottle"><div class="beer-liquid"><span class="beer-bubble"></span><span class="beer-bubble"></span><span class="beer-bubble"></span><span class="beer-bubble"></span><span class="beer-bubble"></span></div></div>' +
+    '</div>' +
     '<div class="spinner-text">Running · ' + esc(entryLabel) + '</div>' +
     '</div>' +
     '<div class="skeleton">' +

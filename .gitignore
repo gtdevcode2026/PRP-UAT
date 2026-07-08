@@ -6,6 +6,7 @@ __pycache__/
 # Local build artifacts / not needed for the deployed dashboard
 *.zip
 .agents/
+.playwright-mcp/
 skills-lock.json
 .DS_Store
 Thumbs.db
