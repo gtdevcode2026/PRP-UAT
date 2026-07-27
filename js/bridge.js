@@ -99,6 +99,9 @@ window.ReportBridge = (function () {
     // each report reads them via ReportEngine.excelDateInfo/excelYear
     // instead of JS Date getters. See excelDateInfo's comment for why.
     var wb = XLSX.read(buf, { type: 'array' });
+    // s4 records the source workbook's name in its History table, the way the
+    // script logs os.path.basename(input_file).
+    wb.__fileName = file && file.name;
     var fn = window.Reports[entry.id];
     if (!fn) throw new Error('No JS report implementation for ' + entry.id);
     var result = await fn(wb);

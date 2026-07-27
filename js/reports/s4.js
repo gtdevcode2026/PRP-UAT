@@ -124,7 +124,9 @@ window.Reports.s4 = async function s4(wb) {
     'Risk Created in 2026': riskCreated,
     'Target 80%': targetValue,
     'Closed %': totalRisk ? closedRisk / totalRisk : 0,
-    'Input File': 'workbook.xlsx',
+    // os.path.basename(input_file) — the uploaded file's own name, threaded
+    // through by runReport; the placeholder only shows if it wasn't supplied.
+    'Input File': (wb && wb.__fileName) || 'workbook.xlsx',
     'Processed On': processedOn,
   };
 
@@ -275,9 +277,58 @@ window.Reports.s4 = async function s4(wb) {
   var workbook = new ExcelJS.Workbook();
   var wsDash = workbook.addWorksheet('Dashboard');
   g.forEach(function (r) { wsDash.addRow(r); });
-  wsDash.columns.forEach(function (c) { c.width = 16; });
   // grid is 0-indexed, ExcelJS is 1-indexed.
   pctCells.forEach(function (rc) { wsDash.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
+
+  // ── Cell formatting — the xlsxwriter format objects, one for one ──
+  // header_fmt / left_fmt gold, peach_fmt on the calculation labels, thin
+  // borders throughout, body numbers right-aligned. Number formats are left
+  // alone: PCT_FMT above already covers every percent cell.
+  var GOLD = 'FFFFC000', PEACH = 'FFF4B183';
+  var THIN = { style: 'thin', color: { argb: 'FF000000' } };
+  var BORDER = { top: THIN, left: THIN, bottom: THIN, right: THIN };
+  var CENTER = { horizontal: 'center', vertical: 'middle' }, RIGHT = { horizontal: 'right' };
+  function fmt(row, col, o) {
+    var cell = wsDash.getCell(row, col);
+    if (o.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill } };
+    if (o.bold || o.size) cell.font = { bold: !!o.bold, size: o.size || 11 };
+    if (o.border) cell.border = BORDER;
+    if (o.align) cell.alignment = o.align;
+  }
+
+  // Matrix: gold header row, gold row labels down column A, bordered body —
+  // applied to blank cells too, as the script does, so the grid stays unbroken.
+  var nCols = tableHeaders.length;
+  for (var hc = 1; hc <= nCols; hc++) fmt(1, hc, { fill: GOLD, bold: true, border: true, align: CENTER });
+  tableRows.forEach(function (_, r) {
+    var rowNum = r + 2;
+    fmt(rowNum, 1, { fill: GOLD, bold: true, border: true });
+    for (var c = 2; c <= nCols; c++) fmt(rowNum, c, { border: true, align: RIGHT });
+  });
+
+  // title_fmt, then the calculation block: peach labels, bordered values,
+  // centred percents. The helper block below reuses the same percent styling.
+  var titleRow = startRow + 1;
+  fmt(titleRow, 1, { bold: true, size: 14 });
+  calcLabels.forEach(function (_, r) {
+    var rowNum = titleRow + 1 + r;
+    fmt(rowNum, 1, { fill: PEACH, border: true, align: CENTER });
+    fmt(rowNum, 2, { border: true });
+    fmt(rowNum, 3, calcPercents[r] === '' ? { border: true } : { border: true, align: CENTER });
+  });
+  var noteRowNum = titleRow + 1 + calcLabels.length;
+  fmt(noteRowNum, 1, { fill: GOLD, bold: true, border: true });
+  fmt(noteRowNum, 2, { border: true });
+  var chartStartRow = chartStart + 1;
+  calcLabels.forEach(function (_, r) {
+    if (calcPercents[r] !== '') fmt(chartStartRow + 1 + r, 3, { border: true, align: CENTER });
+  });
+
+  // set_column(0,0,28) / set_column(1,6,14). xlsxwriter stores a requested
+  // width plus its own padding, so these are the values that land on disk —
+  // a bare 28/14 here would render narrower than the script's output.
+  wsDash.getColumn(1).width = 28.7109375;
+  for (var wc = 2; wc <= 7; wc++) wsDash.getColumn(wc).width = 14.7109375;
   // Native, editable progress chart (data-linked to a hidden helper block)
   // replaces the baked PNG: single gold series with the first and last bars
   // recolored gray (Baseline/Target), white centered labels, no legend.
@@ -295,6 +346,9 @@ window.Reports.s4 = async function s4(wb) {
       def: {
         grouping: 'clustered', legend: false, title: 'Cumulative Risk Treatment Progress',
         chartBg: '000000', plotBg: '000000', axisColor: 'FFFFFF',
+        // set_y_axis({visible: False, major_gridlines: {visible: False}}) and
+        // set_x_axis({label_position: "low"}) — the bars carry their own labels.
+        hideValAx: true, catTickLblPos: 'low',
         dataLabels: { position: 'ctr', color: 'FFFFFF' },
         categories: { ref: R('Dashboard', 1, s4First, s4Last), cache: calcLabels },
         series: [

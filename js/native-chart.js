@@ -99,6 +99,15 @@
     var valPos = barDir === 'bar' ? 'b' : 'l';
     var catOrient = def.catReversed ? 'maxMin' : 'minMax';
     var valNumFmt = def.valNumFmt ? '<c:numFmt formatCode="' + def.valNumFmt + '" sourceLinked="0"/>' : '';
+    // hideValAx mirrors xlsxwriter's set_y_axis({visible: False, major_gridlines:
+    // {visible: False}}) — used where the bars carry their own data labels and a
+    // second scale would only add noise. Default keeps the axis and gridlines.
+    var valDelete = def.hideValAx ? '1' : '0';
+    var valGridlines = def.hideValAx ? '' : '<c:majorGridlines/>';
+    // catTickLblPos mirrors set_x_axis({label_position: ...}); 'low' pins the
+    // category labels below the plot instead of floating them at the axis line.
+    var catTickLblPos = def.catTickLblPos
+      ? '<c:tickLblPos val="' + def.catTickLblPos + '"/>' : '';
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<c:chartSpace xmlns:c="' + C + '" xmlns:a="' + A + '" xmlns:r="' + R + '">' +
       '<c:roundedCorners val="0"/><c:chart>' + title +
@@ -107,10 +116,10 @@
       '<c:varyColors val="0"/>' + sers + gap + overlap +
       '<c:axId val="' + CAT + '"/><c:axId val="' + VAL + '"/></c:barChart>' +
       '<c:catAx><c:axId val="' + CAT + '"/><c:scaling><c:orientation val="' + catOrient + '"/></c:scaling>' +
-      '<c:delete val="0"/><c:axPos val="' + catPos + '"/>' + axisTxt(def.axisColor) +
+      '<c:delete val="0"/><c:axPos val="' + catPos + '"/>' + catTickLblPos + axisTxt(def.axisColor) +
       '<c:crossAx val="' + VAL + '"/></c:catAx>' +
       '<c:valAx><c:axId val="' + VAL + '"/><c:scaling><c:orientation val="minMax"/></c:scaling>' +
-      '<c:delete val="0"/><c:axPos val="' + valPos + '"/><c:majorGridlines/>' + valNumFmt + axisTxt(def.axisColor) +
+      '<c:delete val="' + valDelete + '"/><c:axPos val="' + valPos + '"/>' + valGridlines + valNumFmt + axisTxt(def.axisColor) +
       '<c:crossAx val="' + CAT + '"/></c:valAx>' +
       plotFill + '</c:plotArea>' + legend +
       '<c:plotVisOnly val="0"/><c:dispBlanksAs val="gap"/></c:chart>' +

@@ -172,6 +172,11 @@ window.ReportEngine = (function () {
   }
 
   // --- generic chart extraction (mirrors _chartable + _chart_json) ---
+  // Exact match only — s4's "Total Risk" is a real series, not a totals line.
+  function isTotalLabel(v) {
+    var s = isBlank(v) ? '' : String(v).trim().toLowerCase();
+    return s === 'grand total' || s === 'total';
+  }
   function chartableFromSheet(sheet) {
     if (!sheet || !sheet.rows.length) return null;
     var headers = sheet.headers;
@@ -180,11 +185,15 @@ window.ReportEngine = (function () {
       (isNumericColumn(sheet.rows, i) ? numericIdx : labelIdx).push(i);
     });
     if (!numericIdx.length || !labelIdx.length) return null;
+    // A "Grand Total" COLUMN is the sum of the other series, so charting it adds
+    // a redundant bar that dwarfs its own parts (d3's Summary). Drop it, same as
+    // the totals ROW below — unless it is the only numeric column, leaving
+    // nothing to plot. The table keeps the column; this only affects the chart.
+    var nonTotalIdx = numericIdx.filter(function (i) { return !isTotalLabel(headers[i]); });
+    if (nonTotalIdx.length) numericIdx = nonTotalIdx;
     var labelI = labelIdx[0];
     var rows = sheet.rows.filter(function (row) {
-      if (isBlank(row[labelI])) return false;
-      var s = String(row[labelI]).trim().toLowerCase();
-      return s !== 'grand total' && s !== 'total';
+      return !isBlank(row[labelI]) && !isTotalLabel(row[labelI]);
     });
     if (!rows.length) return null;
     var labels = rows.map(function (row) { return String(row[labelI]); });
@@ -287,9 +296,15 @@ window.ReportEngine = (function () {
   // now-wider matrix, so the corner cell = total count) is appended second —
   // matching pandas pivot_table(margins=True) / the manual two-step
   // Grand-Total-column-then-row pattern used by the non-margins scripts.
+  //
+  // opts.valueFn mirrors pandas `values=<col>, aggfunc="count"`, which counts
+  // NON-NULL value cells rather than rows: a row whose value cell is blank is
+  // skipped, but it still contributes its index/column LABEL, because pandas
+  // keeps that group in the result (at 0). Omit valueFn to count rows.
   function pivotCount(rows, indexFn, columnsFn, opts) {
     opts = opts || {};
     var marginsName = opts.marginsName || 'Grand Total';
+    var valueFn = opts.valueFn;
     var indexVals = [], indexSeen = new Set();
     var colVals = [], colSeen = new Set();
     rows.forEach(function (row) {
@@ -305,6 +320,7 @@ window.ReportEngine = (function () {
       colVals.forEach(function (cv) { counts[iv][cv] = 0; });
     });
     rows.forEach(function (row) {
+      if (valueFn && isBlank(valueFn(row))) return;
       var iv = indexFn(row), cv = columnsFn(row);
       counts[iv][cv] += 1;
     });

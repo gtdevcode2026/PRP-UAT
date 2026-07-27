@@ -49,7 +49,12 @@ window.Reports.d2 = async function d2(wb) {
   };
   filtered.forEach(function (r) { r['Org Display'] = E.mapZone(r.Organization, ORG_MAP); });
 
-  var pivotRaw = E.pivotCount(filtered, function (r) { return r['Org Display']; }, function (r) { return r['Final Stage']; }, { margins: false });
+  // values="ID", aggfunc="count" — pandas counts non-null IDs, NOT rows, so a
+  // Cyber/2026 row with a blank ID is excluded from the pivot even though it
+  // still counts toward the KPI totals below (which use len(filtered)). That
+  // asymmetry is the script's, and the Grand Total row may legitimately come
+  // out lower than the "(closed/record)" figure in the chart title.
+  var pivotRaw = E.pivotCount(filtered, function (r) { return r['Org Display']; }, function (r) { return r['Final Stage']; }, { margins: false, valueFn: function (r) { return r.ID; } });
   var headers = pivotRaw.headers.slice();
   var dataRows = pivotRaw.rows.map(function (r) { return r.slice(); });
   ['Open', 'Closed'].forEach(function (col) {
@@ -73,9 +78,18 @@ window.Reports.d2 = async function d2(wb) {
   var totalGrand = pivotRows.reduce(function (a, r) { return a + r.grandTotal; }, 0);
   var pivotDisplay = pivotRows.concat([{ label: 'Grand Total', open: totalOpen, closed: totalClosed, grandTotal: totalGrand }]);
 
+  // Python's round() is half-to-EVEN, so round(0.125, 2) is 0.12 where JS's
+  // Math.round would give 0.13. Small filtered sets land on those exact halves
+  // (1/8, 3/8, ...), and the KPI is published, so match the script's rounding.
+  function pyRound2(x) {
+    var scaled = x * 100, floor = Math.floor(scaled), diff = scaled - floor;
+    var n = diff > 0.5 ? floor + 1 : (diff < 0.5 ? floor : (floor % 2 === 0 ? floor : floor + 1));
+    return n / 100;
+  }
+
   var closedTotal = filtered.filter(function (r) { return r['Final Stage'] === 'Closed'; }).length;
   var recordTotal = filtered.length;
-  var q2_26 = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
+  var q2_26 = recordTotal ? pyRound2(closedTotal / recordTotal) : 0;
   var KPI = [
     ["Baseline '25", 0.60, 'static'],
     ["Q1 '26", 0.32, 'static'],
@@ -174,7 +188,60 @@ window.Reports.d2 = async function d2(wb) {
   var workbook = new ExcelJS.Workbook();
   var ws = workbook.addWorksheet('Dashboard');
   grid.forEach(function (r) { ws.addRow(r); });
-  ws.columns.forEach(function (c) { c.width = 16; });
+
+  // ── Cell styling — the openpyxl block, one for one ──
+  // header_fill/subheader_fill/grand_fill + bold + thin border + centering.
+  // ExcelJS wants ARGB, openpyxl takes RGB, hence the FF alpha prefix.
+  var HEADER_FILL = 'FFB7DEE8', SUBHEADER_FILL = 'FFD9EAF7';
+  var THIN = { style: 'thin', color: { argb: 'FF000000' } };
+  var BORDER = { top: THIN, left: THIN, bottom: THIN, right: THIN };
+  var CENTER = { horizontal: 'center', vertical: 'middle' };
+  function style(row, col, opts) {
+    var cell = ws.getCell(row, col);
+    if (opts.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.fill } };
+    if (opts.bold) cell.font = { bold: true };
+    if (opts.border) cell.border = BORDER;
+    if (opts.center) cell.alignment = CENTER;
+    if (opts.numFmt) cell.numFmt = opts.numFmt;
+  }
+
+  // Filter area: labels in A, values in B.
+  [1, 2].forEach(function (r) {
+    style(r, 1, { fill: HEADER_FILL, bold: true, border: true });
+    style(r, 2, { fill: SUBHEADER_FILL, border: true });
+  });
+
+  // Pivot table: header row, then bordered body with everything but the row
+  // label centred, then the Grand Total row re-filled and bolded on top.
+  var PIVOT_COLS = 4;
+  for (var pc = 1; pc <= PIVOT_COLS; pc++) {
+    style(startRow, pc, { fill: HEADER_FILL, bold: true, border: true, center: true });
+  }
+  pivotDisplay.forEach(function (r, i) {
+    var rowNum = startRow + 1 + i;
+    for (var c = 1; c <= PIVOT_COLS; c++) {
+      style(rowNum, c, { border: true, center: c > 1 });
+      if (r.label === 'Grand Total') style(rowNum, c, { fill: HEADER_FILL, bold: true });
+    }
+  });
+
+  // KPI table: header row, bordered rows, values shown as whole percents.
+  for (var kc = 1; kc <= 3; kc++) {
+    style(kpiStartRow, kc, { fill: HEADER_FILL, bold: true, border: true, center: true });
+  }
+  KPI.forEach(function (_, i) {
+    var rowNum = kpiStartRow + 1 + i;
+    for (var c = 1; c <= 3; c++) style(rowNum, c, { border: true });
+    style(rowNum, 2, { numFmt: '0%' });
+  });
+  style(noteRow, 1, { bold: true });
+
+  // Column widths (A-M), uniform row heights, and freeze_panes = "A5" — which
+  // is a 4-row vertical split, so the pivot header stays put while scrolling.
+  var WIDTHS = [18, 12, 12, 14, 4, 14, 14, 14, 14, 14, 14, 14, 14];
+  WIDTHS.forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
+  for (var rh = 1; rh <= 49; rh++) ws.getRow(rh).height = 22;
+  ws.views = [{ state: 'frozen', xSplit: 0, ySplit: startRow }];
 
   // Native, editable charts (data-linked to hidden helper blocks) replace the
   // two baked PNGs: org = stacked column, kpi = horizontal percent bar.

@@ -44,11 +44,28 @@ window.Reports.d3 = async function d3(wb) {
     { margins: false }
   );
 
+  // The script charts a FIXED window of columns B:C — "ONLY Pending +
+  // Completed in 2026, exclude Grand Total column" — and colours series[0] red
+  // / series[1] orange, so it presumes both Working1 columns are present in
+  // that order. pivot_table only emits the values that actually occur, so when
+  // the filter yields just one of them (all-Pending data, say) that fixed
+  // window slides onto Grand Total and charts the total as if it were a
+  // status. Pin both columns, zero-filled, the way the d2 script pins
+  // Open/Closed. The filter above admits no other value, so this is exhaustive.
+  var W1_COLUMNS = ['Completed in 2026', 'Pending'];
+  var baseRows = pivot.rows.map(function (r) {
+    return W1_COLUMNS.map(function (name) {
+      var i = pivot.headers.indexOf(name);
+      return i === -1 ? 0 : r[i];
+    });
+  });
+
   // Manual two-step Grand Total (matches `pivot["Grand Total"]=sum(axis=1)`
   // then `pivot.loc["Grand Total"]=sum()` — column first, then row over the
-  // now-wider matrix).
-  var headers = pivot.headers.concat(['Grand Total']);
-  var dataRows = pivot.rows.map(function (r) {
+  // now-wider matrix). The sheet keeps all three columns: Completed, Pending
+  // and Grand Total; only the CHART leaves the total out.
+  var headers = W1_COLUMNS.concat(['Grand Total']);
+  var dataRows = baseRows.map(function (r) {
     var sum = r.reduce(function (a, b) { return a + b; }, 0);
     return r.concat([sum]);
   });
@@ -72,9 +89,9 @@ window.Reports.d3 = async function d3(wb) {
   var D3_COLORS = { 'Completed in 2026': '#FF0000', 'Pending': '#FFC000' };
   var images = {};
   if (pivot.indexVals.length) {
-    var d3Traces = pivot.headers.map(function (colName, idx) {
+    var d3Traces = W1_COLUMNS.map(function (colName, idx) {
       return {
-        x: pivot.indexVals, y: pivot.rows.map(function (r) { return r[idx]; }),
+        x: pivot.indexVals, y: baseRows.map(function (r) { return r[idx]; }),
         type: 'bar', name: colName, marker: { color: D3_COLORS[colName] || '#4472C4' },
       };
     });
