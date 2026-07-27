@@ -217,11 +217,23 @@ def period_sort_key(label):
     return month_order.get(m.group(1), 99) if m else 99
 
 
-def build_dashboard_frames(history, current_total_for_target):
+def build_dashboard_frames(history, current_total_for_target, current_period):
     """Create dashboard tables like your screenshot."""
     history = history.copy()
     history["_sort"] = history["Month"].apply(period_sort_key)
     history = history.sort_values("_sort").drop(columns=["_sort"])
+
+    # This dashboard is "as on" the period THIS file describes, so a stored
+    # period LATER than it cannot belong here. Left in, it takes one of the
+    # three chart columns and pushes a real period off the left edge -- which is
+    # how a May report came to show Apr/May/Dec long after the December row that
+    # caused it was fixed. The row stays in History.xlsx; it is simply not part
+    # of this report.
+    current_key = period_sort_key(current_period)
+    skipped = history[history["Month"].apply(period_sort_key) > current_key]["Month"].tolist()
+    if skipped:
+        print(f"Held but not charted: {', '.join(map(str, skipped))} (later than {current_period})")
+    history = history[history["Month"].apply(period_sort_key) <= current_key]
 
     # Only last 3 periods appear in the chart/table between Baseline and Target.
     graph_history = history.tail(3).reset_index(drop=True)
@@ -354,7 +366,7 @@ def main():
 
     metrics = calculate_metrics(input_file)
     history, added = update_history(metrics)
-    table_df, calc_df = build_dashboard_frames(history, metrics["Total Risk"])
+    table_df, calc_df = build_dashboard_frames(history, metrics["Total Risk"], metrics["Month"])
     write_files(history, table_df, calc_df)
 
     print("Done.")

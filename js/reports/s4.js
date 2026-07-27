@@ -22,14 +22,17 @@
 // says so in its execution summary rather than pretending it saved anything.
 window.S4History = (function () {
   'use strict';
-  // Versioned: bump when a change makes rows written by the previous build
-  // untrustworthy. v1 rows were stamped by the clock-derived period code, which
-  // could invent a month no sheet contained (a "Jul '26" alongside May data)
-  // and then carry it forward into every later run. Nothing distinguishes a
+  // Versioned: bump when a change makes rows written by a previous build
+  // untrustworthy. Fixing how a period is DERIVED does not unsay a bad label
+  // that was already saved — a wrong month keeps being charted from storage
+  // long after the code that produced it is gone, which is exactly how a "Dec
+  // '26" and a "Jul '26" each outlived their fix. Nothing distinguishes a
   // poisoned row from a good one after the fact, so the whole generation is
   // retired rather than asking every user to find the Reset button.
-  var KEY = 'prp.s4.history.v2';
-  var STALE_KEYS = ['prp.s4.history.v1'];
+  //   v1 — clock-derived period ("Jul '26" beside May data)
+  //   v2 — max()-date period (one scheduled December date named the report)
+  var KEY = 'prp.s4.history.v3';
+  var STALE_KEYS = ['prp.s4.history.v1', 'prp.s4.history.v2'];
 
   function store() {
     try {
@@ -282,12 +285,17 @@ window.Reports.s4 = async function s4(wb) {
     return m ? (order[m[1]] || 99) : 99;
   }
   var sortedHistory = history.slice().sort(function (a, b) { return periodSortKey(a.Month) - periodSortKey(b.Month); });
-  // history.tail(3) — the last three periods by sort order, with no reference to
-  // the period THIS file describes. A stored period later than this one still
-  // takes a chart column and pushes an earlier real period off the left edge
-  // (a May report showing Apr/May/Jul). That is the script's behaviour; the run
-  // summary lists every held period so the three on show can be accounted for.
-  var graphHistory = sortedHistory.slice(-3);
+  // This dashboard is "as on" the period THIS file describes, so a stored period
+  // LATER than it cannot belong here. Left in, it takes one of the three chart
+  // columns and pushes a real period off the left edge — which is how a May
+  // report kept showing Apr/May/Dec long after the December row that caused it
+  // was fixed: the bad label was already saved, and fixing the derivation does
+  // not unsay it. The row stays in history; it is simply not part of this
+  // report. Mirrored in diagram4/automation.py — change both together.
+  var currentKey = periodSortKey(periodLabel);
+  var laterPeriods = sortedHistory.filter(function (r) { return periodSortKey(r.Month) > currentKey; })
+    .map(function (r) { return r.Month; });
+  var graphHistory = sortedHistory.filter(function (r) { return periodSortKey(r.Month) <= currentKey; }).slice(-3);
   var periodLabels = graphHistory.map(function (r) { return r.Month; });
   var targetForTable = Math.round(totalRisk * TARGET_PERCENT);
 
@@ -523,7 +531,7 @@ window.Reports.s4 = async function s4(wb) {
     : historySaved
       ? 'saved to browser storage · ' + history.length + ' period' + (history.length === 1 ? '' : 's') + ' held'
       : 'could not be saved (storage full or blocked)';
-  var stdout = [
+  var lines = [
     'Done.',
     'Input file: ' + metrics['Input File'],
     'Month calculated: ' + metrics.Month,
@@ -550,7 +558,14 @@ window.Reports.s4 = async function s4(wb) {
     'History store: ' + storageNote,
     'Periods held: ' + history.map(function (r) { return r.Month; }).join(', '),
     'Periods in chart: ' + periodLabels.join(', ') + '  (last 3 of ' + history.length + ')',
-  ].join('\n');
+  ];
+  if (laterPeriods.length) {
+    // The "  ^ " prefix is what makes the shell open the Script log by itself —
+    // a period silently dropped from the chart must not go unmentioned.
+    lines.push('  ^ Held but not charted: ' + laterPeriods.join(', ') +
+      '   (later than ' + periodLabel + ', this file\'s period — use Reset to clear them)');
+  }
+  var stdout = lines.join('\n');
 
   return {
     ok: true,
