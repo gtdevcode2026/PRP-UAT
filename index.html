@@ -2161,9 +2161,16 @@ window.Reports.d2 = async function d2(wb) {
     return tagMatch && yearMatch;
   });
 
-  var CLOSED_STAGES = { 'Completed': 1, 'Under review': 1 };
+  // Stage is matched case-insensitively for the same reason Tags is: OneTrust
+  // exports the label with inconsistent casing ("Under review" / "Under
+  // Review"), and an exact-case set silently reclassifies every variant as
+  // Open. That is the second way this report can pass its filter on a real
+  // export and still publish a confident 0% — the rows are there, none of them
+  // are Closed. No two genuine stages differ only by case, so nothing that
+  // counted as Closed before can stop counting.
+  var CLOSED_STAGES = { 'completed': 1, 'under review': 1 };
   filtered.forEach(function (r) {
-    r['Final Stage'] = CLOSED_STAGES.hasOwnProperty(r.Stage) ? 'Closed' : 'Open';
+    r['Final Stage'] = CLOSED_STAGES.hasOwnProperty(String(r.Stage).toLowerCase()) ? 'Closed' : 'Open';
   });
 
   var ORG_MAP = {
@@ -2214,10 +2221,15 @@ window.Reports.d2 = async function d2(wb) {
   var closedTotal = filtered.filter(function (r) { return r['Final Stage'] === 'Closed'; }).length;
   var recordTotal = filtered.length;
   var q2_26 = recordTotal ? pyRound2(closedTotal / recordTotal) : 0;
+  // A 0% here is either a real measurement or the filter finding nothing, and
+  // the chart renders both identically. Say which, in the cell that sits beside
+  // the value, so the number is never published without its reason.
+  var q2Remark = !recordTotal ? 'no rows matched Tags=Cyber + 2026 — see Diagnostics below'
+    : (!closedTotal ? 'rows matched, none at a Closed stage — see Diagnostics below' : '');
   var KPI = [
     ["Baseline '25", 0.60, 'static'],
     ["Q1 '26", 0.32, 'static'],
-    ["Q2 '26", q2_26, ''],
+    ["Q2 '26", q2_26, q2Remark],
     ["Target '26", 0.65, 'static'],
   ];
 
@@ -2295,10 +2307,22 @@ window.Reports.d2 = async function d2(wb) {
   setCell(grid, diagRow + 1, 2, rows.length);
   setCell(grid, diagRow + 1, 3, tagOnly);
   setCell(grid, diagRow + 1, 4, yearOnly);
-  setCell(grid, diagRow + 2, 1, 'Tags seen');
-  setCell(grid, diagRow + 2, 2, distinct(rows.map(function (r) { return r.Tags; }), 6));
-  setCell(grid, diagRow + 3, 1, 'Date created seen');
-  setCell(grid, diagRow + 3, 2, distinct(yearsSeen, 6) +
+  // The filter counts alone cannot explain a 0% when the filter DID match, so
+  // carry the split that actually feeds the KPI: Q2 is Closed / Rows kept.
+  ['Stage split', 'Rows kept', 'Closed', 'Open'].forEach(function (h, i) {
+    setCell(grid, diagRow + 2, i + 1, h);
+  });
+  setCell(grid, diagRow + 3, 1, 'Counts');
+  setCell(grid, diagRow + 3, 2, recordTotal);
+  setCell(grid, diagRow + 3, 3, closedTotal);
+  setCell(grid, diagRow + 3, 4, recordTotal - closedTotal);
+  setCell(grid, diagRow + 4, 1, 'Stages seen');
+  setCell(grid, diagRow + 4, 2, distinct((recordTotal ? filtered : rows).map(function (r) { return r.Stage; }), 6) +
+    (recordTotal ? '' : '  (whole sheet — nothing passed the filter)'));
+  setCell(grid, diagRow + 5, 1, 'Tags seen');
+  setCell(grid, diagRow + 5, 2, distinct(rows.map(function (r) { return r.Tags; }), 6));
+  setCell(grid, diagRow + 6, 1, 'Date created seen');
+  setCell(grid, diagRow + 6, 2, distinct(yearsSeen, 6) +
     (unparsedDates ? '  — ' + unparsedDates + ' cell(s) could not be read as a date' : ''));
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
@@ -2410,9 +2434,10 @@ window.Reports.d2 = async function d2(wb) {
   for (var dc = 1; dc <= 4; dc++) {
     style(diagRow, dc, { fill: HEADER_FILL, bold: true, border: true, center: dc > 1 });
     style(diagRow + 1, dc, { border: true, center: dc > 1 });
+    style(diagRow + 2, dc, { fill: HEADER_FILL, bold: true, border: true, center: dc > 1 });
+    style(diagRow + 3, dc, { border: true, center: dc > 1 });
   }
-  style(diagRow + 2, 1, { bold: true });
-  style(diagRow + 3, 1, { bold: true });
+  for (var dr = 4; dr <= 6; dr++) style(diagRow + dr, 1, { bold: true });
 
   // Column widths (A-M), uniform row heights, and freeze_panes = "A5" — which
   // is a 4-row vertical split, so the pivot header stays put while scrolling.
