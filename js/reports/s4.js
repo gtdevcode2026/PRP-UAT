@@ -62,38 +62,53 @@ window.Reports.s4 = async function s4(wb) {
   var riskCreated = dateCreatedCol ? rows.filter(function (r) { return E.excelYear(r[dateCreatedCol]) === YEAR; }).length : 0;
   var targetValue = Math.round(totalRisk * TARGET_PERCENT);
 
+  function dateKey(d) { return d.year * 10000 + d.month * 100 + d.day; }
+  function currentMonthLabel() {
+    var now = new Date();
+    var abbr = MONTH_ABBR[now.getMonth()];
+    return abbr === 'Mar' ? "Q1 '26" : (abbr + " '" + String(now.getFullYear()).slice(2));
+  }
+
+  // The reporting month is the latest 2026 date that has actually ELAPSED.
+  //
+  // Real client exports carry rows dated later in the year — a risk with a
+  // scheduled closure date, a mistyped year, a forward-planned review. The
+  // original script took a plain max() over Date created/Date closed, so one
+  // row dated 2026-12-14 was enough to relabel the whole period "Dec '26"
+  // and push a phantom December column into the chart. Future-dated rows are
+  // ignored *here only*; they still count towards the open / closed / created
+  // totals above, which is correct — they are real risks, just not evidence
+  // that December has happened.
   function getPeriodLabel() {
+    var now = new Date();
+    var todayKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    var sawYear = false;
     var dates = [];
     [dateCreatedCol, dateClosedCol].forEach(function (col) {
       if (!col) return;
-      var years = rows.map(function (r) { return E.excelDateInfo(r[col]); }).filter(function (d) { return d && d.year === YEAR; });
-      if (years.length) {
-        var maxD = years.reduce(function (a, b) {
-          if (a.year !== b.year) return a.year > b.year ? a : b;
-          if (a.month !== b.month) return a.month > b.month ? a : b;
-          return a.day >= b.day ? a : b;
-        });
-        dates.push(maxD);
+      var elapsed = [];
+      rows.forEach(function (r) {
+        var d = E.excelDateInfo(r[col]);
+        if (!d || d.year !== YEAR) return;
+        sawYear = true;
+        if (dateKey(d) <= todayKey) elapsed.push(d);
+      });
+      if (elapsed.length) {
+        dates.push(elapsed.reduce(function (a, b) { return dateKey(a) >= dateKey(b) ? a : b; }));
       }
     });
-    if (!dates.length) throw new Error('No valid ' + YEAR + ' dates found in Date created/Date closed columns.');
-    var latest = dates.reduce(function (a, b) {
-      if (a.year !== b.year) return a.year > b.year ? a : b;
-      if (a.month !== b.month) return a.month > b.month ? a : b;
-      return a.day >= b.day ? a : b;
-    });
+    if (!dates.length) {
+      // 2026 dates exist but none have happened yet: label the report with the
+      // current month rather than a month that is still in the future.
+      if (sawYear) return currentMonthLabel();
+      throw new Error('No valid ' + YEAR + ' dates found in Date created/Date closed columns.');
+    }
+    var latest = dates.reduce(function (a, b) { return dateKey(a) >= dateKey(b) ? a : b; });
     var abbr = MONTH_ABBR[latest.month - 1];
     return abbr === 'Mar' ? "Q1 '26" : (abbr + " '26");
   }
 
-  var periodLabel;
-  if (dateCreatedCol || dateClosedCol) {
-    periodLabel = getPeriodLabel();
-  } else {
-    var now = new Date();
-    var abbr = MONTH_ABBR[now.getMonth()];
-    periodLabel = abbr === 'Mar' ? "Q1 '26" : (abbr + " '" + String(now.getFullYear()).slice(2));
-  }
+  var periodLabel = (dateCreatedCol || dateClosedCol) ? getPeriodLabel() : currentMonthLabel();
 
   var processedOn = (function () {
     var d = new Date();
@@ -170,6 +185,18 @@ window.Reports.s4 = async function s4(wb) {
     while (grid[row].length <= col) grid[row].push(null);
     grid[row][col] = value;
   }
+  // Every cell below that holds a fraction meant to READ as a percentage.
+  // The original xlsxwriter script wrote these with pct_fmt (num_format "0%");
+  // the port dropped the format and left the bare float, which is why the
+  // sheet showed 0.058908046 instead of 5.9%. Tracked as coordinates so the
+  // Excel number format and the in-app preview stay in step.
+  var PCT_FMT = '0.0%';
+  var pctCells = [];
+  function setPercent0(grid, row, col, value) {
+    setCell0(grid, row, col, value === '' ? '' : value);
+    if (value !== '') pctCells.push([row, col]);
+  }
+
   var g = [];
   tableHeaders.forEach(function (h, c) { setCell0(g, 0, c, h); });
   tableRows.forEach(function (row, r) { row.forEach(function (v, c) { setCell0(g, r + 1, c, v); }); });
@@ -180,7 +207,7 @@ window.Reports.s4 = async function s4(wb) {
     var excelRow = startRow + 1 + r;
     setCell0(g, excelRow, 0, label);
     setCell0(g, excelRow, 1, calcValues[r]);
-    setCell0(g, excelRow, 2, calcPercents[r] === '' ? '' : calcPercents[r]);
+    setPercent0(g, excelRow, 2, calcPercents[r]);
   });
   setCell0(g, startRow + 1 + calcLabels.length, 0, 'Note');
   setCell0(g, startRow + 1 + calcLabels.length, 1, 'Target = 80% of latest Total Risk');
@@ -193,17 +220,33 @@ window.Reports.s4 = async function s4(wb) {
     var excelRow = chartStart + 1 + r;
     setCell0(g, excelRow, 0, label);
     setCell0(g, excelRow, 1, calcValues[r]);
-    setCell0(g, excelRow, 2, calcPercents[r] === '' ? '' : calcPercents[r]);
+    setPercent0(g, excelRow, 2, calcPercents[r]);
   });
 
   var historyHeaderRow = HIST_COLS;
   var historyDataRows = history.map(function (r) { return HIST_COLS.map(function (c) { return r[c]; }); });
   var historyGrid = [historyHeaderRow].concat(historyDataRows);
+  // "Closed %" is the same fraction-as-a-percent column, one sheet over.
+  var closedPctCol = HIST_COLS.indexOf('Closed %');
+  var histPctCells = historyDataRows.map(function (_, i) { return [i + 1, closedPctCol]; });
 
-  var files = [
-    { name: 'Risk_Output.xlsx', sheets: [{ name: 'Dashboard', grid: g }, { name: 'History Used', grid: historyGrid }] },
-    { name: 'History.xlsx', sheets: [{ name: 'Sheet1', grid: historyGrid }] },
-  ];
+  // Excel keeps the live number (still computable / chartable) and gets the
+  // number format. The in-app preview renders grid values verbatim, so hand
+  // it the already-rendered percentage instead of the raw fraction.
+  //
+  // Dashboard only. History's grid stays numeric because selectCharts('s4')
+  // derives the preview chart from History.xlsx via chartableFromSheet, which
+  // picks its series by "is this column numeric" — stringifying Closed % there
+  // would silently drop a series from the chart.
+  function renderPercents(grid, cells) {
+    var out = grid.map(function (row) { return row.slice(); });
+    cells.forEach(function (rc) {
+      var v = out[rc[0]] && out[rc[0]][rc[1]];
+      if (typeof v === 'number') out[rc[0]][rc[1]] = (v * 100).toFixed(1) + '%';
+    });
+    return out;
+  }
+  var gPreview = renderPercents(g, pctCells);
 
   // Preview chart comes from the History table (matches today's app, which
   // derives it from History.xlsx, not from the Dashboard's own matrix — see
@@ -233,6 +276,8 @@ window.Reports.s4 = async function s4(wb) {
   var wsDash = workbook.addWorksheet('Dashboard');
   g.forEach(function (r) { wsDash.addRow(r); });
   wsDash.columns.forEach(function (c) { c.width = 16; });
+  // grid is 0-indexed, ExcelJS is 1-indexed.
+  pctCells.forEach(function (rc) { wsDash.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
   // Native, editable progress chart (data-linked to a hidden helper block)
   // replaces the baked PNG: single gold series with the first and last bars
   // recolored gray (Baseline/Target), white centered labels, no legend.
@@ -263,6 +308,7 @@ window.Reports.s4 = async function s4(wb) {
   var wsHistUsed = workbook.addWorksheet('History Used');
   historyGrid.forEach(function (r) { wsHistUsed.addRow(r); });
   wsHistUsed.columns.forEach(function (c) { c.width = 16; });
+  histPctCells.forEach(function (rc) { wsHistUsed.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
 
   var riskOutputBuf = await workbook.xlsx.writeBuffer();
   if (s4Placements.length) {
@@ -274,12 +320,13 @@ window.Reports.s4 = async function s4(wb) {
   var wsHistOnly = historyWorkbook.addWorksheet('Sheet1');
   historyGrid.forEach(function (r) { wsHistOnly.addRow(r); });
   wsHistOnly.columns.forEach(function (c) { c.width = 16; });
+  histPctCells.forEach(function (rc) { wsHistOnly.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
   var historyBuf = await historyWorkbook.xlsx.writeBuffer();
 
   return {
     ok: true,
     files: [
-      { name: 'Risk_Output.xlsx', bytes: riskOutputBuf, sheets: [{ name: 'Dashboard', grid: g }, { name: 'History Used', grid: historyGrid }] },
+      { name: 'Risk_Output.xlsx', bytes: riskOutputBuf, sheets: [{ name: 'Dashboard', grid: gPreview }, { name: 'History Used', grid: historyGrid }] },
       { name: 'History.xlsx', bytes: historyBuf, sheets: [{ name: 'Sheet1', grid: historyGrid }] },
     ],
     chartImages: { 'Dashboard': progressChartPng },

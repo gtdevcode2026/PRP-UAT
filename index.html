@@ -46,10 +46,11 @@
   }
   loadVendors(VENDORS).then(function () { _vendorsOk = true; _check(); }).catch(function (err) { _vendorErr = err; _check(); });
   /* Optional vendors — animation only. Never sets _vendorErr: the app must
-     boot and stay fully usable if these are missing or offline. */
+     boot and stay fully usable if these are missing or offline.
+     ScrollTrigger is deliberately not loaded: nothing in this tool reveals
+     on scroll any more, so it would be ~43 KB of dead weight. */
   var VENDORS_OPTIONAL = [
-    { local: 'vendor/gsap.min.js',          cdn: 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js' },
-    { local: 'vendor/ScrollTrigger.min.js', cdn: 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js' },
+    { local: 'vendor/gsap.min.js', cdn: 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js' },
   ];
   loadVendors(VENDORS_OPTIONAL)
     .then(function () { if (window.tryInitHeroAnimations) window.tryInitHeroAnimations(); })
@@ -60,46 +61,60 @@
 
 
 /* ============================================================
-   PRP Automation Dashboard — visual system v4
-   Palette : true black + gold ring glass (green/red = status only)
-   Radius  : panels 20-24 · rows 14 · pills 999  (locked)
-   Type    : Arial throughout (UI, data, display)
+   PRP Automation Dashboard — visual system v5
+   Palette : near-black + AB InBev gold (green / red = status only)
+   Radius  : panels 12 · controls 8 · chips 6  (locked)
+   Type    : ONE family. `body` carries the only font-family
+             declaration in this stylesheet; everything else
+             inherits it. Hierarchy is size + weight, never family.
+             Nothing ships below 11.5px, and every text colour
+             below clears WCAG AA (4.5:1) on --bg and --surface.
    ============================================================ */
 :root {
   --bg:        #0d0e11;
   /* brand gold */
   --gold:      #EDC94F;
   --gold-hi:   #F2D465;
-  --gold-mid:  #E5BD3D;
-  --gold-deep: #B58D20;
   --gold-ink:  #241C05;
   /* text */
   --tx-hi:     #FFFFFF;
-  --tx-body:   rgba(255,255,255,0.78);
-  --tx-mute:   rgba(255,255,255,0.55);
-  --tx-faint:  rgba(255,255,255,0.42);
-  --cream-dim:   rgba(255,240,200,0.52);
-  --cream-faint: rgba(255,240,200,0.38);
+  --tx-body:   rgba(255,255,255,0.80);
+  --tx-mute:   rgba(255,255,255,0.62);
+  --tx-faint:  rgba(255,255,255,0.52);
+  --tx-warm:   rgba(255,240,200,0.62);
   /* semantic status */
   --green:      #6FBF5A;
   --green-soft: #8EC877;
   --red:        #E06A6A;
-  /* corporate solid surfaces (flat, no glass) */
+  --red-soft:   #EF9797;
+  /* solid surfaces (flat, no glass) */
   --surface:   #15171b;
   --surface-2: #1b1e24;
+  --surface-3: var(--surface-3);
   --glass:    #15171b;
-  --glass-2:  #1b1e24;
   --hairline: rgba(255,255,255,0.10);
   --hairline-2: rgba(255,255,255,0.06);
   --border-strong: rgba(255,255,255,0.16);
-  /* corporate radius scale */
+  /* radius scale */
   --r-panel:   12px;
   --r-control: 8px;
   --r-chip:    6px;
-  /* type */
-  --font:  Arial, 'Helvetica Neue', Helvetica, sans-serif;
-  --mono:  Arial, 'Helvetica Neue', Helvetica, sans-serif;
-  --serif: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  /* one content width, shared by header, hero, drawer and shell */
+  --maxw:      1400px;
+  --gutter:    clamp(16px, 3vw, 28px);
+  /* type scale — one family, six steps, ratio ~1.15 */
+  --fs-xs:  11.5px;
+  --fs-sm:  12.5px;
+  --fs-md:  13px;
+  --fs-lg:  15px;
+  --fs-xl:  18px;
+  --fs-2xl: 22px;
+  --font: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  /* semantic stacking order */
+  --z-base:    1;
+  --z-ring:    3;
+  --z-sticky:  100;
+  --z-overlay: 200;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { height: 100%; -webkit-text-size-adjust: 100%; }
@@ -107,14 +122,19 @@ body {
   min-height: 100%;
   background: var(--bg);
   color: var(--tx-body);
-  font-family: var(--font);
-  font-size: 13px;
+  font-family: var(--font);   /* the only font-family in this stylesheet */
+  font-size: var(--fs-md);
   line-height: 1.55;
   letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-body > * { position: relative; z-index: 1; }
+/* UA stylesheets re-assign the family on form controls and pre/code.
+   Pull them back, so "one family" is true and not just declared. */
+button, input, select, textarea, pre, code, kbd, samp {
+  font-family: inherit; font-size: inherit; line-height: inherit;
+}
+body > * { position: relative; z-index: var(--z-base); }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
 ::selection { background: rgba(237,201,79,0.35); color: #fff; }
 * { scrollbar-width: thin; scrollbar-color: rgba(237,201,79,0.22) transparent; }
@@ -138,7 +158,7 @@ body > * { position: relative; z-index: 1; }
   -webkit-mask-composite: xor;
           mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           mask-composite: exclude;
-  pointer-events: none; z-index: 3;
+  pointer-events: none; z-index: var(--z-ring);
 }
 .ring-cap::before { background: var(--border-strong); }
 .ring-sb::before  { background: var(--hairline); }
@@ -150,12 +170,13 @@ body > * { position: relative; z-index: 1; }
 
 /* ── NAVBAR (solid corporate bar) ── */
 .prp-header {
-  position: sticky; top: 0; z-index: 100;
-  padding: 14px clamp(16px, 3vw, 28px) 10px;
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  padding: 14px var(--gutter) 10px;
   background: var(--bg);
   border-bottom: 1px solid transparent;
 }
 .prp-capsule {
+  max-width: var(--maxw); margin: 0 auto;
   border-radius: var(--r-panel); overflow: hidden;
   background: var(--surface);
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
@@ -167,12 +188,12 @@ body > * { position: relative; z-index: 1; }
 .prp-logo-sep { width: 1px; height: 26px; background: rgba(255,240,200,0.15); flex: none; }
 .prp-brand { min-width: 0; }
 .prp-brand-name {
-  font-size: 15.5px; font-weight: 600; color: var(--tx-hi); letter-spacing: -0.015em;
+  font-size: var(--fs-lg); font-weight: 700; color: var(--tx-hi); letter-spacing: -0.015em;
   line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .prp-brand-sub {
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.26em;
-  color: rgba(237,201,79,0.75); text-transform: uppercase; margin-top: 2px; white-space: nowrap;
+  font-size: var(--fs-xs); color: var(--tx-mute);
+  margin-top: 1px; white-space: nowrap; line-height: 1.3;
 }
 
 /* ── BRAND BUTTON (hamburger toggle for the report drawer) ── */
@@ -187,23 +208,23 @@ body > * { position: relative; z-index: 1; }
   display: flex; flex-direction: column; justify-content: center; gap: 4px;
   width: 20px; height: 16px; flex: none;
 }
+/* Bars are all one width and shortened with scaleX, so open/close animates
+   transform + opacity only — no layout property in the transition. */
 .hamburger i {
-  display: block; height: 2px; border-radius: 2px; background: var(--gold);
-  transition: transform .3s cubic-bezier(.32,.72,0,1), opacity .2s ease, width .3s ease;
+  display: block; width: 20px; height: 2px; border-radius: 2px; background: var(--gold);
+  transition: transform .3s cubic-bezier(.32,.72,0,1), opacity .2s ease;
 }
-.hamburger i:nth-child(1) { width: 20px; }
-.hamburger i:nth-child(2) { width: 14px; margin-left: auto; }
-.hamburger i:nth-child(3) { width: 20px; }
-.prp-brand-btn.open .hamburger i:nth-child(1) { width: 20px; transform: translateY(6px) rotate(45deg); }
-.prp-brand-btn.open .hamburger i:nth-child(2) { opacity: 0; }
-.prp-brand-btn.open .hamburger i:nth-child(3) { width: 20px; transform: translateY(-6px) rotate(-45deg); }
+.hamburger i:nth-child(2) { transform-origin: right center; transform: scaleX(0.7); }
+.prp-brand-btn.open .hamburger i:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.prp-brand-btn.open .hamburger i:nth-child(2) { transform: scaleX(0.7); opacity: 0; }
+.prp-brand-btn.open .hamburger i:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
 .prp-header-right { display: flex; align-items: center; gap: 9px; flex: none; }
 .prp-badge {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 6px 12px; border-radius: var(--r-chip);
   background: var(--surface-2);
   border: 1px solid var(--hairline-2);
-  font-size: 12px; font-weight: 450; color: var(--tx-body);
+  font-size: var(--fs-sm); font-weight: 400; color: var(--tx-body);
   white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 .prp-badge strong { color: var(--gold); font-weight: 650; }
@@ -214,47 +235,47 @@ body > * { position: relative; z-index: 1; }
 }
 .prp-badge-py.ready { color: #B8D8A2; }
 .prp-badge-py.ready::before { background: var(--green); }
+/* Narrow screens: shed the header right-to-left rather than letting the
+   product name crush down to a single letter. The logo plus the drawer
+   toggle still identify and operate the app. */
+@media (max-width: 900px) { .prp-logo { gap: 14px; } }
 @media (max-width: 720px) { .prp-badge-hide { display: none; } }
-@media (max-width: 460px) { .prp-brand-sub, .prp-logo-sep { display: none; } }
+@media (max-width: 620px) { .prp-brand-sub { display: none; } }
+@media (max-width: 520px) {
+  .prp-brand, .prp-logo-sep { display: none; }
+  .prp-brand-btn { padding: 8px; }
+}
 
 /* ── SHELL (full viewport width — no sidebar column, the report list now
    lives in the hamburger drawer below the header) ── */
 .shell {
-  padding: 6px clamp(16px, 3vw, 28px) 52px;
+  padding: 6px var(--gutter) 52px;
 }
+.main-col { max-width: var(--maxw); margin: 0 auto; min-width: 0; }
 
 /* ── HERO (Step 1 · Create PRP) ──
-   Full-viewport opening section on pure black. All initial states are fully
-   visible — GSAP .from() tweens own the entrances, so the hero renders
-   complete even if the animation vendor never loads. */
+   A task header, not a landing page: left-aligned, sized to its own content,
+   so the pipeline below stays on screen instead of a viewport away. */
 .hero {
   position: relative;
-  min-height: calc(100vh - 96px);
-  min-height: calc(100svh - 96px);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 28px clamp(16px, 3vw, 28px) 92px;
+  padding: 38px var(--gutter) 40px;
 }
 .hero-inner {
-  width: 100%; max-width: 860px;
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-}
-.hero-eyebrow {
-  font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
-  color: var(--tx-mute); text-transform: uppercase;
+  width: 100%; max-width: var(--maxw); margin: 0 auto;
+  display: flex; flex-direction: column; align-items: flex-start;
 }
 .hero-title {
-  margin-top: 16px;
-  font-size: clamp(30px, 4.4vw, 46px); font-weight: 650; color: var(--tx-hi);
-  line-height: 1.08; letter-spacing: -0.025em; text-wrap: balance;
+  font-size: clamp(24px, 3vw, 32px); font-weight: 700; color: var(--tx-hi);
+  line-height: 1.14; letter-spacing: -0.022em; text-wrap: balance; max-width: 22ch;
 }
 .hero-sub {
-  margin-top: 15px; max-width: 560px; font-size: 14.5px;
-  color: var(--tx-mute); line-height: 1.65; text-wrap: pretty;
+  margin-top: 11px; max-width: 68ch; font-size: var(--fs-lg);
+  color: var(--tx-mute); line-height: 1.6; text-wrap: pretty;
 }
 
-/* Builder card — single flat corporate panel */
+/* Builder card — single flat panel */
 .prp-builder {
-  width: 100%; max-width: 720px; margin-top: 30px; text-align: left;
+  width: 100%; max-width: 880px; margin-top: 24px;
   border-radius: var(--r-panel);
   background: var(--surface);
 }
@@ -272,12 +293,11 @@ body > * { position: relative; z-index: 1; }
   display: flex; flex-direction: column; gap: 5px; min-width: 0;
   transition: background .2s ease, border-color .2s ease;
 }
-.prp-slot:hover { background: #202329; border-color: var(--hairline); }
+.prp-slot:hover { background: var(--surface-3); border-color: var(--hairline); }
 .prp-slot input[type="file"] { display: none; }
 .prp-slot-kind {
   display: flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
-  color: var(--tx-mute); text-transform: uppercase;
+  font-size: var(--fs-xs); font-weight: 700; color: var(--tx-body);
 }
 .prp-slot-dot {
   width: 7px; height: 7px; border-radius: 999px; flex: none;
@@ -285,11 +305,17 @@ body > * { position: relative; z-index: 1; }
   transition: background .2s;
 }
 .prp-slot-file {
-  font-size: 12.5px; color: var(--tx-mute);
+  font-size: var(--fs-sm); color: var(--tx-mute);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .prp-slot.filled { background: rgba(111,191,90,0.10); border-color: rgba(111,191,90,0.28); }
-.prp-slot.filled .prp-slot-dot { background: var(--green); }
+/* The one piece of motion in the builder, and it conveys state: the dot
+   confirms the moment a file lands in this slot. */
+.prp-slot.filled .prp-slot-dot {
+  background: var(--green);
+  animation: dotFill .26s cubic-bezier(.32,.72,0,1) both;
+}
+@keyframes dotFill { from { transform: scale(0.4); } to { transform: scale(1); } }
 .prp-slot.filled .prp-slot-file { color: var(--tx-hi); }
 .prp-unassigned[hidden] { display: none; }
 .prp-unassigned {
@@ -298,77 +324,67 @@ body > * { position: relative; z-index: 1; }
   background: rgba(224,106,106,0.09);
   border: 1px solid rgba(224,106,106,0.22);
 }
-.prp-unassigned-hint { font-size: 11px; color: var(--tx-faint); }
+.prp-unassigned-hint { font-size: var(--fs-xs); color: var(--tx-mute); }
 .prp-unassigned-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .prp-unassigned-name {
-  flex: 1 1 160px; min-width: 0; font-size: 12.5px; color: var(--tx-hi);
+  flex: 1 1 160px; min-width: 0; font-size: var(--fs-sm); color: var(--tx-hi);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .prp-assign-btn {
   all: unset; cursor: pointer;
-  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-  color: rgba(237,201,79,0.85); padding: 5px 11px; border-radius: var(--r-chip);
+  font-size: var(--fs-sm); font-weight: 700;
+  display: inline-flex; align-items: center; min-height: 34px;
+  color: var(--gold); padding: 6px 12px; border-radius: var(--r-chip);
   border: 1px solid rgba(237,201,79,0.35);
   transition: background .2s ease, color .2s ease;
 }
 .prp-assign-btn:hover { background: rgba(237,201,79,0.12); color: var(--gold-hi); }
 .prp-assign-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .prp-status {
-  font-family: var(--mono); font-size: 11px; color: var(--tx-mute);
-  text-align: center; min-height: 17px;
+  font-size: var(--fs-sm); color: var(--tx-mute); min-height: 19px;
 }
-.prp-status.err { color: var(--red); }
+.prp-status.err { color: var(--red-soft); }
 .prp-status.ok { color: var(--green-soft); }
-.hero-cue {
-  all: unset; cursor: pointer;
-  position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.3em; text-transform: uppercase;
-  color: var(--tx-faint); padding: 8px 14px; border-radius: 999px;
-  transition: color .3s ease;
-}
-.hero-cue:hover { color: var(--gold); }
-.hero-cue:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.hero-cue-chevron { display: block; line-height: 0; }
-.hero-cue-chevron svg { display: block; }
 @media (max-width: 720px) {
   .prp-slots { grid-template-columns: 1fr; }
-  .hero { min-height: 0; padding-bottom: 70px; }
 }
 
-/* ── NAV DRAWER (hamburger dropdown, full header width) ── */
+/* ── NAV DRAWER (hamburger dropdown, aligned to the header capsule) ──
+   Opens via grid-template-rows 0fr→1fr rather than a max-height guess, so
+   the panel is never clipped by a magic number and no layout property
+   (height / padding / margin) is animated. */
 .nav-drawer {
-  max-width: 1400px; margin: 0 auto;
-  max-height: 0; opacity: 0; margin-top: 0;
-  overflow: hidden; pointer-events: none;
-  padding: 0 clamp(16px, 3vw, 28px);
-  transition: max-height .38s cubic-bezier(.32,.72,0,1), opacity .28s ease, margin-top .32s ease;
+  max-width: var(--maxw); margin: 0 auto;
+  display: grid; grid-template-rows: 0fr; opacity: 0; pointer-events: none;
+  transition: grid-template-rows .38s cubic-bezier(.32,.72,0,1), opacity .24s ease;
 }
-.nav-drawer.open {
-  max-height: 640px; opacity: 1; margin-top: 12px; pointer-events: auto;
-}
+.nav-drawer-inner { overflow: hidden; min-height: 0; }
+.nav-drawer.open { grid-template-rows: 1fr; opacity: 1; pointer-events: auto; }
 .nav-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px;
-  border-radius: var(--r-panel); padding: 12px;
+  border-radius: var(--r-panel); padding: 12px; margin-top: 12px;
   background: var(--surface);
   box-shadow: 0 12px 40px -24px rgba(0,0,0,0.7);
 }
 .nav-item {
-  display: flex; align-items: center; gap: 13px;
+  all: unset; box-sizing: border-box;
+  display: flex; align-items: center; gap: 13px; width: 100%;
   padding: 11px 13px; border-radius: var(--r-control); cursor: pointer;
+  border: 1px solid transparent;
   color: var(--tx-mute);
   transition: background .2s ease, color .2s ease;
 }
 .nav-item:hover:not(.active) { background: rgba(255,255,255,0.05); color: var(--tx-hi); }
+.nav-item:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .nav-item.active {
   color: var(--tx-hi);
   background: var(--surface-2);
-  border: 1px solid var(--hairline);
+  border-color: var(--hairline);
 }
 .nav-num {
   width: 26px; height: 26px; border-radius: var(--r-chip); flex: none;
   border: 1px solid var(--hairline); color: var(--tx-mute);
-  font-family: var(--mono); font-size: 11px;
+  font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
   display: grid; place-items: center;
   transition: background .2s, color .2s, border-color .2s;
 }
@@ -377,9 +393,9 @@ body > * { position: relative; z-index: 1; }
   border-color: transparent; color: var(--gold-ink); font-weight: 700;
 }
 .nav-text {
-  font-size: 13.5px; line-height: 1.3; min-width: 0;
+  font-size: var(--fs-md); line-height: 1.3; min-width: 0; text-align: left;
 }
-.nav-item.active .nav-text { font-weight: 600; }
+.nav-item.active .nav-text { font-weight: 700; }
 .nav-glow {
   margin-left: auto; width: 6px; height: 6px; border-radius: 999px; flex: none;
   background: var(--gold); display: none;
@@ -401,7 +417,7 @@ body > * { position: relative; z-index: 1; }
 }
 .pipe-head { display: flex; align-items: center; gap: 10px; padding-bottom: 2px; }
 .pipe-label {
-  font-size: 13px; font-weight: 600; letter-spacing: -0.01em;
+  font-size: var(--fs-md); font-weight: 700; letter-spacing: -0.01em;
   color: var(--tx-hi);
 }
 
@@ -414,28 +430,35 @@ body > * { position: relative; z-index: 1; }
   flex: 1; display: flex; align-items: center; justify-content: center; min-height: 52px;
 }
 .upload-zone:hover, .upload-zone.drag-over {
-  border-color: rgba(237,201,79,0.6); background: #202329;
+  border-color: rgba(237,201,79,0.6); background: var(--surface-3);
 }
 .upload-zone.drag-over { border-style: solid; }
 .upload-zone input[type="file"] {
   position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
 }
-.upload-hint { font-size: 12px; color: var(--tx-mute); pointer-events: none; line-height: 1.5; }
-.upload-hint b { color: var(--tx-hi); font-weight: 500; font-size: 13.5px; margin-right: 4px; }
+/* The input is the focusable element but it is invisible, so an outline on it
+   paints nothing. Lift the ring onto the zone the user can actually see. */
+.upload-zone input[type="file"]:focus-visible { outline: none; }
+.upload-zone:has(input[type="file"]:focus-visible) {
+  outline: 2px solid var(--gold); outline-offset: 2px; border-color: rgba(237,201,79,0.6);
+}
+.upload-hint { font-size: var(--fs-sm); color: var(--tx-mute); pointer-events: none; line-height: 1.55; }
+.upload-hint b { color: var(--tx-hi); font-weight: 700; font-size: var(--fs-md); margin-right: 5px; }
 .file-ready {
   position: relative;
   display: flex; align-items: center; gap: 11px; padding: 11px 13px;
   background: rgba(111,191,90,0.10); border: 1px solid rgba(111,191,90,0.22);
   border-radius: var(--r-control);
 }
-.file-ok { color: var(--green); font-size: 14px; flex: none; }
+.file-ok { color: var(--green); font-size: var(--fs-lg); flex: none; line-height: 1; }
+.log-empty { color: var(--tx-mute); font-size: var(--fs-sm); padding: 4px 0; }
 .file-name {
-  font-size: 13px; font-weight: 500; color: var(--tx-hi); min-width: 0;
+  font-size: var(--fs-md); font-weight: 700; color: var(--tx-hi); min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .file-size-sm {
-  margin-left: auto; flex: none; font-family: var(--mono); font-size: 11px;
-  color: rgba(184,216,162,0.7); font-variant-numeric: tabular-nums; white-space: nowrap;
+  margin-left: auto; flex: none; font-size: var(--fs-xs);
+  color: rgba(184,216,162,0.92); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 
 /* ── VARIANT ── */
@@ -446,7 +469,16 @@ body > * { position: relative; z-index: 1; }
   border: 1px solid var(--hairline-2);
   transition: background .2s, border-color .2s;
 }
-.variant-radio:hover:not(.active) { background: #202329; }
+/* Native radio underneath — keyboard arrow-keys and screen-reader
+   semantics come free; the dot below is the visual. */
+.variant-input {
+  position: absolute; width: 1px; height: 1px; margin: 0;
+  opacity: 0; pointer-events: none;
+}
+/* Same reason as the upload zone: ring the visible label, not the 1px input. */
+.variant-input:focus-visible { outline: none; }
+.variant-radio:hover:not(.active) { background: var(--surface-3); }
+.variant-radio:has(.variant-input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 2px; }
 .variant-radio.active {
   background: rgba(237,201,79,0.08);
   border-color: rgba(237,201,79,0.4);
@@ -461,78 +493,66 @@ body > * { position: relative; z-index: 1; }
   content: ''; width: 7px; height: 7px; border-radius: 999px;
   background: var(--gold);
 }
-.variant-body { min-width: 0; }
-.variant-title { font-family: var(--font); font-size: 15px; font-weight: 600; color: var(--tx-hi); line-height: 1.3; letter-spacing: -0.01em; }
-.variant-notes { font-size: 12.5px; color: var(--tx-mute); line-height: 1.55; margin-top: 4px; }
-.gold-file { color: rgba(237,201,79,0.85); }
+.variant-body { display: block; min-width: 0; }
+.variant-title { display: block; font-size: var(--fs-lg); font-weight: 700; color: var(--tx-hi); line-height: 1.3; letter-spacing: -0.01em; }
+.variant-notes { display: block; font-size: var(--fs-sm); color: var(--tx-mute); line-height: 1.6; margin-top: 5px; max-width: 62ch; }
+.gold-file { color: var(--gold); }
 
 /* ── RUN BUTTON ── */
 .run-btn {
   position: relative; width: 100%;
   background: var(--gold);
   color: var(--gold-ink); border: none; border-radius: var(--r-control);
-  font-family: var(--font); font-size: 14px; font-weight: 650; letter-spacing: -0.01em;
-  padding: 11px 0; text-align: center; cursor: pointer;
+  font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.01em;
+  min-height: 44px; padding: 11px 16px; text-align: center; cursor: pointer;
   transition: background .18s ease, transform .12s ease;
 }
 .run-btn:hover:not(:disabled) { background: var(--gold-hi); }
 .run-btn:active:not(:disabled) { transform: translateY(1px); }
+/* Disabled is exempt from WCAG contrast, but "can't read it" is still a
+   defect — this clears 4.5:1 while staying visibly inert. */
 .run-btn:disabled {
-  background: var(--surface-2); color: rgba(255,255,255,0.35);
+  background: var(--surface-2); color: rgba(255,255,255,0.48);
   border: 1px solid var(--hairline-2); cursor: not-allowed;
 }
-.run-hint { font-size: 12px; color: var(--tx-mute); text-align: center; padding: 4px 0; }
+.run-hint { font-size: var(--fs-sm); color: var(--tx-mute); text-align: center; padding: 4px 0; }
 
 /* ── RUN OUTPUTS ── */
 .run-outputs { display: none; }
 .run-outputs.show { display: flex; flex-direction: column; gap: 9px; animation: fadeUp .4s cubic-bezier(.32,.72,0,1) both; }
 .run-out-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .run-out-label {
-  font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em;
-  color: var(--tx-mute); text-transform: uppercase;
+  font-size: var(--fs-sm); font-weight: 700; color: var(--tx-body);
 }
-.run-out-ok { font-size: 11.5px; color: var(--green-soft); white-space: nowrap; }
-.dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
-.dl-btn {
+.run-out-ok { font-size: var(--fs-sm); color: var(--green-soft); white-space: nowrap; }
+.dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.dl-btn, .copy-link {
+  appearance: none; margin: 0;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 10px 12px; border-radius: var(--r-control); min-width: 0;
+  min-height: 40px; padding: 10px 14px; border-radius: var(--r-control); min-width: 0;
   background: var(--surface-2);
   border: 1px solid var(--hairline);
-  color: var(--tx-hi); font-size: 12.5px; font-weight: 500;
+  color: var(--tx-hi); font-size: var(--fs-sm); font-weight: 700;
   text-decoration: none; cursor: pointer;
-  transition: background .2s, border-color .2s;
-}
-.dl-btn:hover { background: #202329; border-color: var(--border-strong); }
-.dl-btn svg { color: var(--gold); }
-.dl-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.run-out-foot { display: flex; align-items: center; justify-content: center; gap: 12px; }
-.copy-link {
-  all: unset;
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
-  padding: 10px 16px; border-radius: var(--r-control); min-width: 0;
-  background: var(--surface-2);
-  border: 1px solid var(--hairline);
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--tx-mute);
   transition: background .2s, border-color .2s, color .2s;
 }
-.copy-link svg { color: var(--gold); flex: none; }
-.copy-link:hover { background: #202329; color: var(--tx-hi); border-color: var(--border-strong); }
-.copy-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.dl-btn:hover, .copy-link:hover { background: var(--surface-3); border-color: var(--border-strong); }
+.dl-btn:focus-visible, .copy-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.dl-btn svg, .copy-link svg { color: var(--gold); flex: none; }
+.dl-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .copy-link.ok { color: var(--green-soft); }
-.dotsep { width: 3px; height: 3px; border-radius: 999px; background: rgba(255,240,200,0.3); flex: none; }
-.run-out-note { font-size: 10.5px; color: var(--cream-faint); white-space: nowrap; }
+.copy-link.ok svg { color: var(--green-soft); }
 
 /* ── PYTHON CHART PREVIEW ── */
 .py-charts-wrap { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
 .py-chart-img { max-width: 100%; height: auto; display: block; border-radius: 6px; }
-.py-chart-note { padding: 32px; text-align: center; color: var(--tx-mute); font-size: 13px; }
+.py-chart-note { padding: 32px; text-align: center; color: var(--tx-mute); font-size: var(--fs-md); }
 
 /* ── PREVIEW HEADER ── */
 .preview-bar { display: flex; align-items: center; gap: 14px; padding: 8px 4px 0; margin-bottom: 16px; }
-.preview-title { font-family: var(--font); font-size: 18px; font-weight: 600; color: var(--tx-hi); letter-spacing: -0.01em; flex: none; }
+.preview-title { font-size: var(--fs-xl); font-weight: 700; color: var(--tx-hi); letter-spacing: -0.015em; flex: none; }
 .preview-rule { flex: 1; height: 1px; background: var(--hairline); }
-.preview-meta { font-family: var(--mono); font-size: 11px; color: var(--cream-faint); white-space: nowrap; }
+.preview-meta { font-size: var(--fs-xs); color: var(--tx-mute); white-space: nowrap; }
 @media (max-width: 560px) { .preview-meta { display: none; } }
 
 /* ── SHEET PANELS (chart on top, full width; table stacked below) ── */
@@ -541,12 +561,12 @@ body > * { position: relative; z-index: 1; }
 }
 .sheet-solo { margin-bottom: 16px; }
 .panel {
-  border-radius: 20px; padding: 20px 22px 16px;
+  border-radius: var(--r-panel); padding: 18px 20px 16px;
   display: flex; flex-direction: column; gap: 13px; min-width: 0;
 }
 .panel-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
-.panel-title { font-family: var(--serif); font-size: 20px; font-weight: 400; color: var(--tx-hi); letter-spacing: 0; line-height: 1.25; }
-.panel-meta { font-family: var(--mono); font-size: 11px; color: var(--cream-faint); }
+.panel-title { font-size: var(--fs-lg); font-weight: 700; color: var(--tx-hi); letter-spacing: -0.012em; line-height: 1.25; }
+.panel-meta { font-size: var(--fs-xs); color: var(--tx-mute); }
 .chart-box { flex: 1; min-height: 280px; }
 .chart-box-wide { min-height: 460px; }
 @media (max-width: 720px) { .chart-box-wide { min-height: 340px; } }
@@ -554,58 +574,58 @@ body > * { position: relative; z-index: 1; }
 /* ── TABLES ── */
 .data-table-wrap {
   overflow: auto; max-height: 360px;
-  border: 1px solid var(--hairline); border-radius: 12px;
+  border: 1px solid var(--hairline); border-radius: var(--r-panel);
 }
-.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.data-table thead { position: sticky; top: 0; z-index: 1; }
+.data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.data-table thead { position: sticky; top: 0; z-index: var(--z-base); }
 .data-table th {
   background: var(--surface-2);
-  font-family: var(--mono); font-size: 10px; font-weight: 500;
-  letter-spacing: 0.14em; text-transform: uppercase; color: var(--tx-mute);
+  font-size: var(--fs-xs); font-weight: 700; color: var(--tx-body);
   padding: 10px 14px; text-align: left;
   border-bottom: 1px solid var(--hairline); white-space: nowrap;
 }
 .data-table td {
-  padding: 9px 14px; color: rgba(255,255,255,0.85);
+  padding: 9px 14px; color: rgba(255,255,255,0.88);
   border-bottom: 1px solid var(--hairline-2);
   white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-.data-table tbody tr:hover td { background: rgba(237,201,79,0.05); }
+.data-table tbody tr:hover td { background: rgba(237,201,79,0.06); }
 .data-table tr:last-child td { border-bottom: none; }
-.table-hint { font-size: 10.5px; color: var(--cream-faint); margin-top: 8px; }
+.table-hint { font-size: var(--fs-xs); color: var(--tx-mute); margin-top: 8px; }
 
 /* ── LOG ── */
-details.log-details { border-radius: 16px; margin-top: 6px; overflow: hidden; }
+details.log-details { border-radius: var(--r-panel); margin-top: 6px; overflow: hidden; }
 details.log-details summary {
-  color: var(--tx-mute); font-size: 12px; font-weight: 550; letter-spacing: 0.01em;
-  padding: 12px 18px; cursor: pointer; list-style: none; user-select: none;
+  color: var(--tx-mute); font-size: var(--fs-sm); font-weight: 700;
+  min-height: 44px; padding: 12px 18px; cursor: pointer; list-style: none; user-select: none;
   display: flex; align-items: center; gap: 9px; transition: color .25s;
 }
 details.log-details summary::-webkit-details-marker { display: none; }
 details.log-details summary::before {
-  content: '›'; font-family: var(--mono); font-size: 14px; color: rgba(237,201,79,0.6);
-  transition: transform .2s ease; display: inline-block;
+  content: '›'; font-size: var(--fs-lg); color: var(--gold);
+  transition: transform .2s ease; display: inline-block; line-height: 1;
 }
 details.log-details[open] summary::before { transform: rotate(90deg); }
 details.log-details summary:hover { color: var(--gold); }
 details.log-details[open] summary { border-bottom: 1px solid var(--hairline-2); }
 .log-content { padding: 14px 18px; }
 .log-label {
-  font-family: var(--mono); font-size: 9px; font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.12em; color: var(--cream-faint); margin: 10px 0 7px;
+  font-size: var(--fs-xs); font-weight: 700;
+  color: var(--tx-mute); margin: 14px 0 7px;
 }
 .log-code {
-  background: rgba(0,0,0,0.5); border: 1px solid var(--hairline-2); border-radius: 12px;
-  color: var(--tx-body); font-size: 11.5px; line-height: 1.75; font-family: var(--mono);
-  padding: 13px 15px; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+  background: rgba(0,0,0,0.5); border: 1px solid var(--hairline-2); border-radius: var(--r-control);
+  color: var(--tx-body); font-size: var(--fs-xs); line-height: 1.75;
+  font-variant-numeric: tabular-nums; tab-size: 4;
+  padding: 13px 15px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
 }
 
 /* ── SPINNER + SKELETON ── */
 .spinner-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 240px; gap: 16px; }
 .spinner { width: 28px; height: 28px; border: 2px solid rgba(237,201,79,0.15); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.spinner-text { color: var(--tx-mute); font-size: 12.5px; letter-spacing: 0.01em; text-align: center; }
+.spinner-text { color: var(--tx-mute); font-size: var(--fs-sm); text-align: center; }
 .skeleton { margin-top: 8px; }
 .skeleton-bar-block {
   height: 200px; border-radius: 16px; margin-bottom: 18px;
@@ -630,54 +650,54 @@ details.log-details[open] summary { border-bottom: 1px solid var(--hairline-2); 
 
 /* ── ALERT ── */
 .alert-error {
-  background: rgba(224,106,106,0.07); border-radius: 14px;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,0.06), inset 0 0 0 1px rgba(224,106,106,0.24);
-  color: var(--tx-body); padding: 15px 18px; font-size: 12.5px; margin-top: 16px; line-height: 1.6;
+  background: rgba(224,106,106,0.07); border-radius: var(--r-panel);
+  box-shadow: inset 0 0 0 1px rgba(224,106,106,0.28);
+  color: var(--tx-body); padding: 15px 18px; font-size: var(--fs-sm); margin-top: 16px; line-height: 1.65;
   display: flex; align-items: flex-start; gap: 11px;
 }
 .alert-error::before {
-  content: '!'; flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
-  background: rgba(224,106,106,0.16); color: var(--red); font-weight: 700; font-size: 11px;
-  display: flex; align-items: center; justify-content: center; font-family: var(--mono);
+  content: '!'; flex-shrink: 0; width: 19px; height: 19px; border-radius: 50%;
+  background: rgba(224,106,106,0.18); color: var(--red-soft); font-weight: 700; font-size: var(--fs-sm);
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+}
+.alert-error code {
+  background: rgba(255,255,255,0.06); border-radius: 4px; padding: 1px 5px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── EMPTY STATE ── */
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 380px; border-radius: var(--r-panel); padding: 52px 32px;
+  min-height: 260px; border-radius: var(--r-panel); padding: 40px 32px;
   position: relative;
   background: var(--surface); border: 1px solid var(--hairline-2);
 }
-.empty-state > * { position: relative; z-index: 1; }
+.empty-state > * { position: relative; z-index: var(--z-base); }
 .empty-state-icon {
-  width: 52px; height: 52px; border-radius: var(--r-control); margin-bottom: 20px;
+  width: 46px; height: 46px; border-radius: var(--r-control); margin-bottom: 18px;
   display: flex; align-items: center; justify-content: center;
   background: var(--surface-2); border: 1px solid var(--hairline); color: var(--gold);
 }
-.empty-state-icon svg { width: 24px; height: 24px; }
-.empty-state-title { font-family: var(--font); font-size: 18px; font-weight: 600; color: var(--tx-hi); letter-spacing: -0.01em; margin-bottom: 8px; }
-.empty-state-desc { font-size: 12.5px; color: var(--tx-mute); text-align: center; max-width: 340px; line-height: 1.7; margin-bottom: 22px; }
-.empty-steps { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.empty-step {
-  display: inline-flex; align-items: center;
-  font-size: 11.5px; font-weight: 500; color: var(--tx-mute);
-  background: var(--surface-2); border: 1px solid var(--hairline-2);
-  border-radius: var(--r-chip); padding: 6px 12px;
+.empty-state-icon svg { width: 22px; height: 22px; }
+.empty-state-title { font-size: var(--fs-xl); font-weight: 700; color: var(--tx-hi); letter-spacing: -0.015em; margin-bottom: 8px; }
+.empty-state-desc { font-size: var(--fs-md); color: var(--tx-mute); text-align: center; max-width: 46ch; line-height: 1.65; margin-bottom: 20px; text-wrap: pretty; }
+/* The four stages, in order, as an ordered list — the sequence is the
+   information, so the arrows carry it instead of decorative numbering. */
+.empty-steps {
+  display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+  align-items: center; list-style: none; font-size: var(--fs-sm); color: var(--tx-mute);
 }
+.empty-steps li { display: inline-flex; align-items: center; gap: 6px; }
+.empty-steps li + li::before { content: '→'; color: var(--gold); }
 
-/* ── ANIMATIONS ── */
-@keyframes slideInLeft { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes scanLine { 0% { left: -60%; } 100% { left: 110%; } }
-.anim-fade-up { animation: fadeUp 0.5s cubic-bezier(0.32,0.72,0,1) both; }
-.results-reveal { animation: fadeUp 0.52s cubic-bezier(0.32,0.72,0,1) both; }
-.results-reveal > * { animation: fadeUp 0.5s cubic-bezier(0.32,0.72,0,1) both; }
-.results-reveal > *:nth-child(1) { animation-delay: 0.02s; }
-.results-reveal > *:nth-child(2) { animation-delay: 0.07s; }
-.results-reveal > *:nth-child(3) { animation-delay: 0.12s; }
-.results-reveal > *:nth-child(4) { animation-delay: 0.17s; }
-.results-reveal > *:nth-child(5) { animation-delay: 0.22s; }
-.results-reveal > *:nth-child(n+6) { animation-delay: 0.27s; }
+/* ── ANIMATIONS ──
+   Results arrive as one block. The old per-child stagger ladder was the
+   same entrance applied to every row regardless of what the row was, and
+   it left each child at opacity 0 until its delay elapsed. One short
+   settle on the container says "this is new" without holding data back. */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.anim-fade-up { animation: fadeUp 0.4s cubic-bezier(0.32,0.72,0,1) both; }
+.results-reveal { animation: fadeUp 0.34s cubic-bezier(0.32,0.72,0,1) both; }
 
 hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); margin: 4px 0 22px; }
 </style>
@@ -685,10 +705,10 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <body>
 
 <!-- LOADING OVERLAY -->
-<div id="prp-load-overlay" style="position:fixed;inset:0;z-index:99998;background:#0d0e11;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:monospace;">
-  <svg id="prp-load-spin" width="34" height="34" viewBox="0 0 34 34" fill="none" style="animation:prp-spin 1s linear infinite;"><circle cx="17" cy="17" r="13" stroke="rgba(237,201,79,0.18)" stroke-width="3"/><path d="M17 4a13 13 0 0 1 13 13" stroke="#e0c040" stroke-width="3" stroke-linecap="round"/></svg>
-  <div style="color:rgba(255,240,200,0.45);font-size:11px;letter-spacing:0.18em;text-transform:uppercase;">Loading</div>
-  <div id="prp-load-err" style="display:none;color:#ff8080;font-size:12px;text-align:center;max-width:420px;padding:0 24px;line-height:1.8;"></div>
+<div id="prp-load-overlay" role="status" aria-live="polite" style="position:fixed;inset:0;z-index:var(--z-overlay);background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <svg id="prp-load-spin" width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true" style="animation:prp-spin 1s linear infinite;"><circle cx="17" cy="17" r="13" stroke="rgba(237,201,79,0.18)" stroke-width="3"/><path d="M17 4a13 13 0 0 1 13 13" stroke="#e0c040" stroke-width="3" stroke-linecap="round"/></svg>
+  <div style="color:var(--tx-mute);font-size:var(--fs-md);">Loading the offline engine…</div>
+  <div id="prp-load-err" style="display:none;color:var(--red-soft);font-size:var(--fs-sm);text-align:center;max-width:52ch;padding:0 24px;line-height:1.8;"></div>
 </div>
 <style>@keyframes prp-spin { to { transform:rotate(360deg); } }</style>
 
@@ -705,11 +725,14 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
             <path d="M1,-1 C3,-22 20,-24 20,-8 C14,2 4,4 1,-1Z" fill="#D4A800" transform="rotate(120,0,0)"/>
             <path d="M1,-1 C3,-22 20,-24 20,-8 C14,2 4,4 1,-1Z" fill="#F5C518" transform="rotate(240,0,0)"/>
           </g>
-          <text x="68" y="42" font-family="Arial Black,Arial,sans-serif" font-size="32" font-weight="900" fill="#ffffff" letter-spacing="-0.5">ABInBev</text>
+          <text x="68" y="42" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" font-size="32" font-weight="900" fill="#ffffff" letter-spacing="-0.5">ABInBev</text>
         </svg>
       </div>
       <div class="prp-logo-sep"></div>
-      <button class="prp-brand-btn" id="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-drawer">
+      <!-- aria-label carries the accessible name once .prp-brand is hidden on
+           narrow screens; it contains the visible text, so Label-in-Name holds. -->
+      <button class="prp-brand-btn" id="nav-toggle" type="button" aria-expanded="false"
+              aria-controls="nav-drawer" aria-label="PRP Automation Dashboard — report list">
         <div class="prp-brand">
           <div class="prp-brand-name">PRP Automation Dashboard</div>
           <div class="prp-brand-sub">TPRM &amp; Risk Intelligence</div>
@@ -724,20 +747,22 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
     </div>
   </div>
 
-  <!-- REPORT DRAWER — opens via the "PRP Automation Dashboard" title/hamburger -->
+  <!-- REPORT DRAWER — opens via the "PRP Automation Dashboard" title/hamburger.
+       The inner wrapper is what the 0fr→1fr grid row clips; the panel keeps
+       its own padding without leaking a sliver when the drawer is closed. -->
   <nav class="nav-drawer" id="nav-drawer" aria-label="Reports">
-    <div class="nav-grid ring ring-sb" id="nav-panel"></div>
+    <div class="nav-drawer-inner">
+      <div class="nav-grid ring ring-sb" id="nav-panel"></div>
+    </div>
   </nav>
 </header>
 
 <!-- HERO · STEP 1 · CREATE PRP (branding lives in the navbar; hero leads with the tool) -->
 <section class="hero" id="hero" aria-label="Create PRP workbook">
   <div class="hero-inner">
-    <div class="hero-eyebrow">Create PRP</div>
     <h1 class="hero-title">Consolidate three exports into one workbook.</h1>
-    <p class="hero-sub">Drop the raw OneTrust and TPRM exports below to build the consolidated
-    PRP workbook, with dates normalised and ageing formulas added. Then scroll down to
-    generate all seven reports from it, fully offline.</p>
+    <p class="hero-sub">Drop the raw OneTrust and TPRM exports below. Dates are normalised and
+    ageing formulas added, then all seven reports run from the result — fully offline.</p>
 
     <div class="prp-builder glass ring ring-gold" id="prp-builder">
       <div class="prp-builder-core">
@@ -764,22 +789,18 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
         </div>
         <div class="prp-unassigned" id="prp-unassigned" hidden></div>
         <button id="prp-generate-btn" class="run-btn" disabled>Create PRP workbook</button>
-        <div class="prp-status" id="prp-status">Add all three exports to enable</div>
+        <div class="prp-status" id="prp-status" role="status" aria-live="polite">Add all three exports to enable</div>
         <div class="run-outputs" id="prp-outputs"></div>
       </div>
     </div>
   </div>
-  <button class="hero-cue" id="hero-cue" type="button" aria-label="Scroll to the report pipeline">
-    <span>Pipeline</span>
-    <span class="hero-cue-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
-  </button>
 </section>
 
 <!-- SHELL -->
 <div class="shell">
 
   <!-- MAIN -->
-  <main class="main-col" style="min-width:0;">
+  <main class="main-col">
 
     <!-- PIPELINE -->
     <section class="pipeline">
@@ -796,15 +817,15 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 
       <!-- Step 3 · Report variant -->
       <div class="pipe-card glass ring">
-        <div class="pipe-head"><span class="pipe-label">Report variant</span></div>
-        <div id="variant-radios" style="display:flex;flex-direction:column;min-width:0;"></div>
+        <div class="pipe-head"><span class="pipe-label" id="variant-label">Report variant</span></div>
+        <div id="variant-radios" role="radiogroup" aria-labelledby="variant-label" style="display:flex;flex-direction:column;min-width:0;"></div>
       </div>
 
       <!-- Step 4 · Generate -->
       <div class="pipe-card pipe-run glass ring ring-gold">
         <div class="pipe-head"><span class="pipe-label">Generate</span></div>
         <button id="run-btn" class="run-btn" disabled>Run report</button>
-        <div class="run-hint" id="run-hint">Loading Python…</div>
+        <div class="run-hint" id="run-hint" role="status" aria-live="polite">Loading the report engine…</div>
         <div class="run-outputs" id="run-outputs"></div>
       </div>
     </section>
@@ -965,18 +986,22 @@ window.ReportEngine = (function () {
     });
     return lines.join('\n') + '\n';
   }
+  // Exact match only — s4's "Total Risk" is a real series, not a totals line.
+  function isTotalLabel(v) { var s = isBlank(v) ? '' : String(v).trim().toLowerCase(); return s === 'grand total' || s === 'total'; }
   function chartableFromSheet(sheet) {
     if (!sheet || !sheet.rows.length) return null;
     var headers = sheet.headers;
     var numericIdx = [], labelIdx = [];
     headers.forEach(function (h, i) { (isNumericColumn(sheet.rows, i) ? numericIdx : labelIdx).push(i); });
     if (!numericIdx.length || !labelIdx.length) return null;
+    // A "Grand Total" COLUMN is the sum of the other series, so charting it adds a
+    // redundant bar that dwarfs its own parts (d3's Summary). Drop it, same as the
+    // totals ROW below — unless it's the only numeric column, leaving nothing to plot.
+    // The table keeps the column; this only affects the chart.
+    var nonTotalIdx = numericIdx.filter(function (i) { return !isTotalLabel(headers[i]); });
+    if (nonTotalIdx.length) numericIdx = nonTotalIdx;
     var labelI = labelIdx[0];
-    var rows = sheet.rows.filter(function (row) {
-      if (isBlank(row[labelI])) return false;
-      var s = String(row[labelI]).trim().toLowerCase();
-      return s !== 'grand total' && s !== 'total';
-    });
+    var rows = sheet.rows.filter(function (row) { return !isBlank(row[labelI]) && !isTotalLabel(row[labelI]); });
     if (!rows.length) return null;
     var labels = rows.map(function (row) { return String(row[labelI]); });
     var series = numericIdx.map(function (i, idx) {
@@ -1212,7 +1237,10 @@ window.ReportBridge = (function () {
     var host = document.createElement('div');
     host.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + width + 'px;height:' + height + 'px;';
     document.body.appendChild(host);
+    // Plotly's own default family is Open Sans/Verdana. Pin the app font so the
+    // PNGs embedded in the workbook are in the same single family as the UI.
     var fullLayout = Object.assign({ width: width, height: height }, layout);
+    fullLayout.font = Object.assign({ family: "Arial, 'Helvetica Neue', Helvetica, sans-serif" }, fullLayout.font);
     return Plotly.newPlot(host, traces, fullLayout, { staticPlot: true })
       .then(function () { return Plotly.toImage(host, { format: 'png', width: width, height: height }); })
       .then(function (dataUrl) { Plotly.purge(host); document.body.removeChild(host); return dataUrl; })
@@ -2257,11 +2285,28 @@ window.Reports.d3 = async function d3(wb) {
     { margins: false }
   );
 
+  // The script charts a FIXED window of columns B:C — "ONLY Pending +
+  // Completed in 2026, exclude Grand Total column" — and colours series[0] red
+  // / series[1] orange, so it presumes both Working1 columns are present in
+  // that order. pivot_table only emits the values that actually occur, so when
+  // the filter yields just one of them (all-Pending data, say) that fixed
+  // window slides onto Grand Total and charts the total as if it were a
+  // status. Pin both columns, zero-filled, the way the d2 script pins
+  // Open/Closed. The filter above admits no other value, so this is exhaustive.
+  var W1_COLUMNS = ['Completed in 2026', 'Pending'];
+  var baseRows = pivot.rows.map(function (r) {
+    return W1_COLUMNS.map(function (name) {
+      var i = pivot.headers.indexOf(name);
+      return i === -1 ? 0 : r[i];
+    });
+  });
+
   // Manual two-step Grand Total (matches `pivot["Grand Total"]=sum(axis=1)`
   // then `pivot.loc["Grand Total"]=sum()` — column first, then row over the
-  // now-wider matrix).
-  var headers = pivot.headers.concat(['Grand Total']);
-  var dataRows = pivot.rows.map(function (r) {
+  // now-wider matrix). The sheet keeps all three columns: Completed, Pending
+  // and Grand Total; only the CHART leaves the total out.
+  var headers = W1_COLUMNS.concat(['Grand Total']);
+  var dataRows = baseRows.map(function (r) {
     var sum = r.reduce(function (a, b) { return a + b; }, 0);
     return r.concat([sum]);
   });
@@ -2285,9 +2330,9 @@ window.Reports.d3 = async function d3(wb) {
   var D3_COLORS = { 'Completed in 2026': '#FF0000', 'Pending': '#FFC000' };
   var images = {};
   if (pivot.indexVals.length) {
-    var d3Traces = pivot.headers.map(function (colName, idx) {
+    var d3Traces = W1_COLUMNS.map(function (colName, idx) {
       return {
-        x: pivot.indexVals, y: pivot.rows.map(function (r) { return r[idx]; }),
+        x: pivot.indexVals, y: baseRows.map(function (r) { return r[idx]; }),
         type: 'bar', name: colName, marker: { color: D3_COLORS[colName] || '#4472C4' },
       };
     });
@@ -3109,38 +3154,53 @@ window.Reports.s4 = async function s4(wb) {
   var riskCreated = dateCreatedCol ? rows.filter(function (r) { return E.excelYear(r[dateCreatedCol]) === YEAR; }).length : 0;
   var targetValue = Math.round(totalRisk * TARGET_PERCENT);
 
+  function dateKey(d) { return d.year * 10000 + d.month * 100 + d.day; }
+  function currentMonthLabel() {
+    var now = new Date();
+    var abbr = MONTH_ABBR[now.getMonth()];
+    return abbr === 'Mar' ? "Q1 '26" : (abbr + " '" + String(now.getFullYear()).slice(2));
+  }
+
+  // The reporting month is the latest 2026 date that has actually ELAPSED.
+  //
+  // Real client exports carry rows dated later in the year — a risk with a
+  // scheduled closure date, a mistyped year, a forward-planned review. The
+  // original script took a plain max() over Date created/Date closed, so one
+  // row dated 2026-12-14 was enough to relabel the whole period "Dec '26"
+  // and push a phantom December column into the chart. Future-dated rows are
+  // ignored *here only*; they still count towards the open / closed / created
+  // totals above, which is correct — they are real risks, just not evidence
+  // that December has happened.
   function getPeriodLabel() {
+    var now = new Date();
+    var todayKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    var sawYear = false;
     var dates = [];
     [dateCreatedCol, dateClosedCol].forEach(function (col) {
       if (!col) return;
-      var years = rows.map(function (r) { return E.excelDateInfo(r[col]); }).filter(function (d) { return d && d.year === YEAR; });
-      if (years.length) {
-        var maxD = years.reduce(function (a, b) {
-          if (a.year !== b.year) return a.year > b.year ? a : b;
-          if (a.month !== b.month) return a.month > b.month ? a : b;
-          return a.day >= b.day ? a : b;
-        });
-        dates.push(maxD);
+      var elapsed = [];
+      rows.forEach(function (r) {
+        var d = E.excelDateInfo(r[col]);
+        if (!d || d.year !== YEAR) return;
+        sawYear = true;
+        if (dateKey(d) <= todayKey) elapsed.push(d);
+      });
+      if (elapsed.length) {
+        dates.push(elapsed.reduce(function (a, b) { return dateKey(a) >= dateKey(b) ? a : b; }));
       }
     });
-    if (!dates.length) throw new Error('No valid ' + YEAR + ' dates found in Date created/Date closed columns.');
-    var latest = dates.reduce(function (a, b) {
-      if (a.year !== b.year) return a.year > b.year ? a : b;
-      if (a.month !== b.month) return a.month > b.month ? a : b;
-      return a.day >= b.day ? a : b;
-    });
+    if (!dates.length) {
+      // 2026 dates exist but none have happened yet: label the report with the
+      // current month rather than a month that is still in the future.
+      if (sawYear) return currentMonthLabel();
+      throw new Error('No valid ' + YEAR + ' dates found in Date created/Date closed columns.');
+    }
+    var latest = dates.reduce(function (a, b) { return dateKey(a) >= dateKey(b) ? a : b; });
     var abbr = MONTH_ABBR[latest.month - 1];
     return abbr === 'Mar' ? "Q1 '26" : (abbr + " '26");
   }
 
-  var periodLabel;
-  if (dateCreatedCol || dateClosedCol) {
-    periodLabel = getPeriodLabel();
-  } else {
-    var now = new Date();
-    var abbr = MONTH_ABBR[now.getMonth()];
-    periodLabel = abbr === 'Mar' ? "Q1 '26" : (abbr + " '" + String(now.getFullYear()).slice(2));
-  }
+  var periodLabel = (dateCreatedCol || dateClosedCol) ? getPeriodLabel() : currentMonthLabel();
 
   var processedOn = (function () {
     var d = new Date();
@@ -3217,6 +3277,18 @@ window.Reports.s4 = async function s4(wb) {
     while (grid[row].length <= col) grid[row].push(null);
     grid[row][col] = value;
   }
+  // Every cell below that holds a fraction meant to READ as a percentage.
+  // The original xlsxwriter script wrote these with pct_fmt (num_format "0%");
+  // the port dropped the format and left the bare float, which is why the
+  // sheet showed 0.058908046 instead of 5.9%. Tracked as coordinates so the
+  // Excel number format and the in-app preview stay in step.
+  var PCT_FMT = '0.0%';
+  var pctCells = [];
+  function setPercent0(grid, row, col, value) {
+    setCell0(grid, row, col, value === '' ? '' : value);
+    if (value !== '') pctCells.push([row, col]);
+  }
+
   var g = [];
   tableHeaders.forEach(function (h, c) { setCell0(g, 0, c, h); });
   tableRows.forEach(function (row, r) { row.forEach(function (v, c) { setCell0(g, r + 1, c, v); }); });
@@ -3227,7 +3299,7 @@ window.Reports.s4 = async function s4(wb) {
     var excelRow = startRow + 1 + r;
     setCell0(g, excelRow, 0, label);
     setCell0(g, excelRow, 1, calcValues[r]);
-    setCell0(g, excelRow, 2, calcPercents[r] === '' ? '' : calcPercents[r]);
+    setPercent0(g, excelRow, 2, calcPercents[r]);
   });
   setCell0(g, startRow + 1 + calcLabels.length, 0, 'Note');
   setCell0(g, startRow + 1 + calcLabels.length, 1, 'Target = 80% of latest Total Risk');
@@ -3240,17 +3312,33 @@ window.Reports.s4 = async function s4(wb) {
     var excelRow = chartStart + 1 + r;
     setCell0(g, excelRow, 0, label);
     setCell0(g, excelRow, 1, calcValues[r]);
-    setCell0(g, excelRow, 2, calcPercents[r] === '' ? '' : calcPercents[r]);
+    setPercent0(g, excelRow, 2, calcPercents[r]);
   });
 
   var historyHeaderRow = HIST_COLS;
   var historyDataRows = history.map(function (r) { return HIST_COLS.map(function (c) { return r[c]; }); });
   var historyGrid = [historyHeaderRow].concat(historyDataRows);
+  // "Closed %" is the same fraction-as-a-percent column, one sheet over.
+  var closedPctCol = HIST_COLS.indexOf('Closed %');
+  var histPctCells = historyDataRows.map(function (_, i) { return [i + 1, closedPctCol]; });
 
-  var files = [
-    { name: 'Risk_Output.xlsx', sheets: [{ name: 'Dashboard', grid: g }, { name: 'History Used', grid: historyGrid }] },
-    { name: 'History.xlsx', sheets: [{ name: 'Sheet1', grid: historyGrid }] },
-  ];
+  // Excel keeps the live number (still computable / chartable) and gets the
+  // number format. The in-app preview renders grid values verbatim, so hand
+  // it the already-rendered percentage instead of the raw fraction.
+  //
+  // Dashboard only. History's grid stays numeric because selectCharts('s4')
+  // derives the preview chart from History.xlsx via chartableFromSheet, which
+  // picks its series by "is this column numeric" — stringifying Closed % there
+  // would silently drop a series from the chart.
+  function renderPercents(grid, cells) {
+    var out = grid.map(function (row) { return row.slice(); });
+    cells.forEach(function (rc) {
+      var v = out[rc[0]] && out[rc[0]][rc[1]];
+      if (typeof v === 'number') out[rc[0]][rc[1]] = (v * 100).toFixed(1) + '%';
+    });
+    return out;
+  }
+  var gPreview = renderPercents(g, pctCells);
 
   // Preview chart comes from the History table (matches today's app, which
   // derives it from History.xlsx, not from the Dashboard's own matrix — see
@@ -3280,6 +3368,8 @@ window.Reports.s4 = async function s4(wb) {
   var wsDash = workbook.addWorksheet('Dashboard');
   g.forEach(function (r) { wsDash.addRow(r); });
   wsDash.columns.forEach(function (c) { c.width = 16; });
+  // grid is 0-indexed, ExcelJS is 1-indexed.
+  pctCells.forEach(function (rc) { wsDash.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
   // Native, editable progress chart (data-linked to a hidden helper block)
   // replaces the baked PNG: single gold series with the first and last bars
   // recolored gray (Baseline/Target), white centered labels, no legend.
@@ -3310,6 +3400,7 @@ window.Reports.s4 = async function s4(wb) {
   var wsHistUsed = workbook.addWorksheet('History Used');
   historyGrid.forEach(function (r) { wsHistUsed.addRow(r); });
   wsHistUsed.columns.forEach(function (c) { c.width = 16; });
+  histPctCells.forEach(function (rc) { wsHistUsed.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
 
   var riskOutputBuf = await workbook.xlsx.writeBuffer();
   if (s4Placements.length) {
@@ -3321,12 +3412,13 @@ window.Reports.s4 = async function s4(wb) {
   var wsHistOnly = historyWorkbook.addWorksheet('Sheet1');
   historyGrid.forEach(function (r) { wsHistOnly.addRow(r); });
   wsHistOnly.columns.forEach(function (c) { c.width = 16; });
+  histPctCells.forEach(function (rc) { wsHistOnly.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
   var historyBuf = await historyWorkbook.xlsx.writeBuffer();
 
   return {
     ok: true,
     files: [
-      { name: 'Risk_Output.xlsx', bytes: riskOutputBuf, sheets: [{ name: 'Dashboard', grid: g }, { name: 'History Used', grid: historyGrid }] },
+      { name: 'Risk_Output.xlsx', bytes: riskOutputBuf, sheets: [{ name: 'Dashboard', grid: gPreview }, { name: 'History Used', grid: historyGrid }] },
       { name: 'History.xlsx', bytes: historyBuf, sheets: [{ name: 'Sheet1', grid: historyGrid }] },
     ],
     chartImages: { 'Dashboard': progressChartPng },
@@ -3397,12 +3489,13 @@ function renderNav() {
   GROUP_NAMES.forEach(function(gname, idx) {
     const isActive = S.activeGroup === gname;
     const short = SHORT_LABELS[gname] || gname;
-    html += '<div class="nav-item' + (isActive ? ' active' : '') +
-            '" data-group="' + escAttr(gname) + '" title="' + escAttr(gname) + '">' +
-            '<span class="nav-num">' + (idx + 1) + '</span>' +
+    html += '<button type="button" class="nav-item' + (isActive ? ' active' : '') +
+            '" data-group="' + escAttr(gname) + '" title="' + escAttr(gname) + '"' +
+            (isActive ? ' aria-current="true"' : '') + '>' +
+            '<span class="nav-num" aria-hidden="true">' + (idx + 1) + '</span>' +
             '<span class="nav-text">' + esc(short) + '</span>' +
-            '<span class="nav-glow"></span>' +
-            '</div>';
+            '<span class="nav-glow" aria-hidden="true"></span>' +
+            '</button>';
   });
   panel.innerHTML = html;
   panel.querySelectorAll('.nav-item').forEach(function(el) {
@@ -3427,13 +3520,19 @@ function renderNav() {
 function setupNavToggle() {
   const btn = document.getElementById('nav-toggle');
   const drawer = document.getElementById('nav-drawer');
-  function close() {
+  // `inert` keeps the collapsed report list out of the tab order — pointer-events
+  // alone would still let a keyboard user land on invisible buttons.
+  drawer.inert = true;
+  function close(returnFocus) {
     drawer.classList.remove('open');
+    drawer.inert = true;
     btn.classList.remove('open');
     btn.setAttribute('aria-expanded', 'false');
+    if (returnFocus) btn.focus();
   }
   function open() {
     drawer.classList.add('open');
+    drawer.inert = false;
     btn.classList.add('open');
     btn.setAttribute('aria-expanded', 'true');
   }
@@ -3447,9 +3546,9 @@ function setupNavToggle() {
     close();
   });
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape' && drawer.classList.contains('open')) close(true);
   });
-  window.closeNavDrawer = close;
+  window.closeNavDrawer = function() { close(false); };
 }
 
 // ---------------------------------------------------------------------------
@@ -3466,20 +3565,28 @@ function renderVariants() {
   let html = '';
   g.forEach(function(e, i) {
     const isActive = i === S.variantIdx;
-    html += '<div class="variant-radio' + (isActive ? ' active' : '') + '" data-idx="' + i + '">' +
-            '<span class="radio-dot"></span>' +
-            '<div class="variant-body">' +
-            '<div class="variant-title">' + esc(e.label) + '</div>' +
-            (isActive ? '<div class="variant-notes">' + goldFiles(esc(e.notes)) + '</div>' : '') +
-            '</div></div>';
+    // A real <input type="radio"> inside the label: arrow-key navigation,
+    // roving focus and screen-reader state all come from the platform.
+    html += '<label class="variant-radio' + (isActive ? ' active' : '') + '" data-idx="' + i + '">' +
+            '<input type="radio" class="variant-input" name="report-variant" value="' + i + '"' +
+            (isActive ? ' checked' : '') + '>' +
+            '<span class="radio-dot" aria-hidden="true"></span>' +
+            '<span class="variant-body">' +
+            '<span class="variant-title">' + esc(e.label) + '</span>' +
+            (isActive ? '<span class="variant-notes">' + goldFiles(esc(e.notes)) + '</span>' : '') +
+            '</span></label>';
   });
   container.innerHTML = html;
-  container.querySelectorAll('.variant-radio').forEach(function(el) {
-    el.addEventListener('click', function() {
-      const idx = parseInt(el.dataset.idx, 10);
+  container.querySelectorAll('.variant-input').forEach(function(input) {
+    input.addEventListener('change', function() {
+      const idx = parseInt(input.value, 10);
       if (idx === S.variantIdx) return;
       S.variantIdx = idx;
       renderVariants();
+      // Re-render swaps the DOM out from under the radio that fired; put
+      // focus back where the user left it so keyboard nav keeps working.
+      const next = container.querySelector('.variant-input[value="' + idx + '"]');
+      if (next) next.focus();
     });
   });
 }
@@ -3529,7 +3636,7 @@ function _runLoadingUi(entryLabel) {
     '<div class="preview-bar">' +
     '<span class="preview-title">Process preview</span>' +
     '<span class="preview-rule"></span>' +
-    '<span class="preview-meta">generating&hellip;</span>' +
+    '<span class="preview-meta">Generating&hellip;</span>' +
     '</div>' +
     '<div class="spinner-wrap" style="min-height:0;margin-bottom:22px;">' +
     '<div class="spinner"></div>' +
@@ -3556,7 +3663,7 @@ async function handleRun() {
   const ra = document.getElementById('results-area');
 
   if (typeof XLSX === 'undefined' || typeof ExcelJS === 'undefined' || typeof Plotly === 'undefined') {
-    ra.innerHTML = '<div class="alert-error">' +
+    ra.innerHTML = '<div class="alert-error" role="alert">' +
       '<strong>Vendor libraries not loaded.</strong><br>' +
       'Make sure the <code>vendor/</code> folder is present next to <code>index.html</code>, or check your internet connection for CDN fallback.' +
       '</div>';
@@ -3594,7 +3701,7 @@ function renderResults() {
     if (ro) { ro.innerHTML = ''; ro.classList.remove('show'); }
     ra.innerHTML =
       '<div class="empty-state anim-fade-up">' +
-      '<div class="empty-state-icon">' +
+      '<div class="empty-state-icon" aria-hidden="true">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M4 19.5V5a1 1 0 0 1 1-1h9.5L20 9.5V19.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/>' +
       '<path d="M14 4v5.5h5.5"/><path d="M8.5 14.5v2.5"/><path d="M12 12v5"/><path d="M15.5 15v2"/>' +
@@ -3602,12 +3709,12 @@ function renderResults() {
       '<div class="empty-state-title">Your report will appear here</div>' +
       '<div class="empty-state-desc">Choose a report, drop in your workbook, then generate. ' +
       'Downloads appear with the Run button; tables and charts render below.</div>' +
-      '<div class="empty-steps">' +
-      '<div class="empty-step">Create PRP</div>' +
-      '<div class="empty-step">Upload workbook</div>' +
-      '<div class="empty-step">Select report</div>' +
-      '<div class="empty-step">Run</div>' +
-      '</div>' +
+      '<ol class="empty-steps">' +
+      '<li>Create PRP</li>' +
+      '<li>Upload workbook</li>' +
+      '<li>Select report</li>' +
+      '<li>Run</li>' +
+      '</ol>' +
       '</div>';
     return;
   }
@@ -3618,7 +3725,7 @@ function renderResults() {
   if (ro) {
     let ohtml = '<div class="run-out-top">' +
                 '<span class="run-out-label">Download &middot; ' + d.files.length + ' file' + (d.files.length !== 1 ? 's' : '') + '</span>' +
-                '<span class="run-out-ok">&#9679; complete</span>' +
+                '<span class="run-out-ok">&#9679; Complete</span>' +
                 '</div>';
     ohtml += '<div class="dl-grid" id="dl-buttons">';
     if (d.copy_tsv) {
@@ -3667,7 +3774,7 @@ function renderResults() {
     html += '<div class="log-label">stderr</div><pre class="log-code">' + esc(d.stderr) + '</pre>';
   }
   if (!(d.stdout && d.stdout.trim()) && !(d.stderr && d.stderr.trim())) {
-    html += '<div style="color:var(--tx-mute);font-size:12px;padding:4px 0;">No console output.</div>';
+    html += '<div class="log-empty">No console output.</div>';
   }
   html += '</div></details>';
   html += '</div>'; // results-reveal
@@ -3769,16 +3876,14 @@ function renderResults() {
     Plotly.newPlot(el, cfg.traces, cfg.layout, { displayModeBar: false, responsive: true });
   });
 
-  // Results change the page height — let ScrollTrigger re-measure.
-  if (window.ScrollTrigger) ScrollTrigger.refresh();
 }
 
 // ---------------------------------------------------------------------------
 // Table HTML
 // ---------------------------------------------------------------------------
 function tableHtml(headers, rows, totalRows) {
-  let h = '<div class="data-table-wrap"><table class="data-table"><thead><tr>';
-  headers.forEach(function(hdr) { h += '<th>' + esc(hdr || '') + '</th>'; });
+  let h = '<div class="data-table-wrap" tabindex="0"><table class="data-table"><thead><tr>';
+  headers.forEach(function(hdr) { h += '<th scope="col">' + esc(hdr || '') + '</th>'; });
   h += '</tr></thead><tbody>';
   rows.forEach(function(row) {
     h += '<tr>';
@@ -3981,7 +4086,7 @@ function b64ToBytes(b64) {
       out.innerHTML =
         '<div class="run-out-top">' +
         '<span class="run-out-label">Download &middot; consolidated workbook</span>' +
-        '<span class="run-out-ok">&#9679; complete</span>' +
+        '<span class="run-out-ok">&#9679; Complete</span>' +
         '</div>' +
         '<div class="dl-grid"><a class="dl-btn" href="' + H.url + '" download="' + escText(name) + '">' + ICON_DL + escText(name) + '</a></div>';
       out.classList.add('show');
@@ -4002,7 +4107,6 @@ function b64ToBytes(b64) {
         console.warn('CreatePRP warnings:', res.warnings);
       }
       setStatus(okMsg, 'ok');
-      if (window.ScrollTrigger) ScrollTrigger.refresh();
     } catch (err) {
       setStatus('Failed: ' + (err && err.message ? err.message : String(err)), 'err');
     } finally {
@@ -4049,43 +4153,32 @@ function b64ToBytes(b64) {
 
     el('prp-generate-btn').addEventListener('click', handleGenerate);
 
-    var cue = el('hero-cue');
-    if (cue) cue.addEventListener('click', function () {
-      var target = document.querySelector('.shell');
-      var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (target) target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-    });
-
     renderSlots();
   };
 
-  // ── GSAP choreography — idempotent; callable from the vendor loader and
-  // from init(), whichever lands last with everything in place wins. ──
+  // ── Arrival motion — idempotent; callable from the vendor loader and from
+  // init(), whichever lands last with everything in place wins.
+  //
+  // This is a tool, not a landing page, so there is no orchestrated load
+  // sequence: one 0.3s settle on the hero block and nothing else. The old
+  // version staggered five elements over ~1.4s and reveal-gated the pipeline
+  // controls on a ScrollTrigger, which left the whole app blank on arrival
+  // and invisible entirely in print / headless renders. Every control is now
+  // painted by CSS first; GSAP only softens how the hero lands. ──
   var _heroAnimated = false;
   window.tryInitHeroAnimations = function tryInitHeroAnimations() {
     if (_heroAnimated) return;
-    if (!window.gsap || !window.ScrollTrigger) return;
-    if (!document.getElementById('hero')) return;
+    if (!window.gsap) return;
+    var hero = document.querySelector('.hero-inner');
+    if (!hero) return;
     // Wait for the boot overlay to clear — otherwise the entrance plays unseen.
     var overlay = document.getElementById('prp-load-overlay');
     if (overlay && overlay.style.display !== 'none') return;
     _heroAnimated = true;
+    if (window.scrollY > 40) return;  // deep-scrolled reload: nothing to settle
 
-    gsap.registerPlugin(ScrollTrigger);
     gsap.matchMedia().add('(prefers-reduced-motion: no-preference)', function () {
-      // Restrained corporate entrance — a short settle, no flourishes.
-      var tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
-      tl.from('.hero-eyebrow', { autoAlpha: 0, y: 8, duration: 0.4 })
-        .from('.hero-title',   { autoAlpha: 0, y: 14, duration: 0.5 }, '-=0.2')
-        .from('.hero-sub',     { autoAlpha: 0, y: 12, duration: 0.45 }, '-=0.32')
-        .from('#prp-builder',  { autoAlpha: 0, y: 16, duration: 0.5 }, '-=0.28')
-        .from('.hero-cue',     { autoAlpha: 0, duration: 0.4 }, '-=0.15');
-      if (window.scrollY > 40) tl.progress(1);  // deep-scrolled reload: skip intro
-
-      gsap.from('.pipeline .pipe-card', {
-        y: 18, autoAlpha: 0, duration: 0.45, stagger: 0.08, ease: 'power2.out',
-        scrollTrigger: { trigger: '.pipeline', start: 'top 84%', once: true },
-      });
+      gsap.from(hero, { autoAlpha: 0, y: 10, duration: 0.3, ease: 'power2.out' });
     });
   };
 })();

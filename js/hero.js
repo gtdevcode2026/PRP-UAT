@@ -136,7 +136,6 @@
         console.warn('CreatePRP warnings:', res.warnings);
       }
       setStatus(okMsg, 'ok');
-      if (window.ScrollTrigger) ScrollTrigger.refresh();
     } catch (err) {
       setStatus('Failed: ' + (err && err.message ? err.message : String(err)), 'err');
     } finally {
@@ -183,43 +182,32 @@
 
     el('prp-generate-btn').addEventListener('click', handleGenerate);
 
-    var cue = el('hero-cue');
-    if (cue) cue.addEventListener('click', function () {
-      var target = document.querySelector('.shell');
-      var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (target) target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-    });
-
     renderSlots();
   };
 
-  // ── GSAP choreography — idempotent; callable from the vendor loader and
-  // from init(), whichever lands last with everything in place wins. ──
+  // ── Arrival motion — idempotent; callable from the vendor loader and from
+  // init(), whichever lands last with everything in place wins.
+  //
+  // This is a tool, not a landing page, so there is no orchestrated load
+  // sequence: one 0.3s settle on the hero block and nothing else. The old
+  // version staggered five elements over ~1.4s and reveal-gated the pipeline
+  // controls on a ScrollTrigger, which left the whole app blank on arrival
+  // and invisible entirely in print / headless renders. Every control is now
+  // painted by CSS first; GSAP only softens how the hero lands. ──
   var _heroAnimated = false;
   window.tryInitHeroAnimations = function tryInitHeroAnimations() {
     if (_heroAnimated) return;
-    if (!window.gsap || !window.ScrollTrigger) return;
-    if (!document.getElementById('hero')) return;
+    if (!window.gsap) return;
+    var hero = document.querySelector('.hero-inner');
+    if (!hero) return;
     // Wait for the boot overlay to clear — otherwise the entrance plays unseen.
     var overlay = document.getElementById('prp-load-overlay');
     if (overlay && overlay.style.display !== 'none') return;
     _heroAnimated = true;
+    if (window.scrollY > 40) return;  // deep-scrolled reload: nothing to settle
 
-    gsap.registerPlugin(ScrollTrigger);
     gsap.matchMedia().add('(prefers-reduced-motion: no-preference)', function () {
-      // Restrained corporate entrance — a short settle, no flourishes.
-      var tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
-      tl.from('.hero-eyebrow', { autoAlpha: 0, y: 8, duration: 0.4 })
-        .from('.hero-title',   { autoAlpha: 0, y: 14, duration: 0.5 }, '-=0.2')
-        .from('.hero-sub',     { autoAlpha: 0, y: 12, duration: 0.45 }, '-=0.32')
-        .from('#prp-builder',  { autoAlpha: 0, y: 16, duration: 0.5 }, '-=0.28')
-        .from('.hero-cue',     { autoAlpha: 0, duration: 0.4 }, '-=0.15');
-      if (window.scrollY > 40) tl.progress(1);  // deep-scrolled reload: skip intro
-
-      gsap.from('.pipeline .pipe-card', {
-        y: 18, autoAlpha: 0, duration: 0.45, stagger: 0.08, ease: 'power2.out',
-        scrollTrigger: { trigger: '.pipeline', start: 'top 84%', once: true },
-      });
+      gsap.from(hero, { autoAlpha: 0, y: 10, duration: 0.3, ease: 'power2.out' });
     });
   };
 })();

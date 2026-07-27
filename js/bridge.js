@@ -41,7 +41,10 @@ window.ReportBridge = (function () {
     host.style.width = width + 'px';
     host.style.height = height + 'px';
     document.body.appendChild(host);
+    // Plotly's own default family is Open Sans/Verdana. Pin the app font so the
+    // PNGs embedded in the workbook are in the same single family as the UI.
     var fullLayout = Object.assign({ width: width, height: height }, layout);
+    fullLayout.font = Object.assign({ family: "Arial, 'Helvetica Neue', Helvetica, sans-serif" }, fullLayout.font);
     return Plotly.newPlot(host, traces, fullLayout, { staticPlot: true })
       .then(function () { return Plotly.toImage(host, { format: 'png', width: width, height: height }); })
       .then(function (dataUrl) {
