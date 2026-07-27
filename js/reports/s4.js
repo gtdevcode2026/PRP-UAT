@@ -22,7 +22,14 @@
 // says so in its execution summary rather than pretending it saved anything.
 window.S4History = (function () {
   'use strict';
-  var KEY = 'prp.s4.history.v1';   // versioned: a schema change bumps the key
+  // Versioned: bump when a change makes rows written by the previous build
+  // untrustworthy. v1 rows were stamped by the clock-derived period code, which
+  // could invent a month no sheet contained (a "Jul '26" alongside May data)
+  // and then carry it forward into every later run. Nothing distinguishes a
+  // poisoned row from a good one after the fact, so the whole generation is
+  // retired rather than asking every user to find the Reset button.
+  var KEY = 'prp.s4.history.v2';
+  var STALE_KEYS = ['prp.s4.history.v1'];
 
   function store() {
     try {
@@ -39,6 +46,9 @@ window.S4History = (function () {
     var s = store();
     if (!s) return null;
     try {
+      // Retired generations are dead weight, not fallbacks — drop them on sight
+      // so a later key bump can never resurrect one.
+      STALE_KEYS.forEach(function (k) { s.removeItem(k); });
       var raw = s.getItem(KEY);
       if (!raw) return null;
       var rows = JSON.parse(raw);
@@ -56,7 +66,11 @@ window.S4History = (function () {
   function clear() {
     var s = store();
     if (!s) return false;
-    try { s.removeItem(KEY); return true; } catch (e) { return false; }
+    try {
+      s.removeItem(KEY);
+      STALE_KEYS.forEach(function (k) { s.removeItem(k); });
+      return true;
+    } catch (e) { return false; }
   }
   function count() { var r = load(); return r ? r.length : 0; }
   return { KEY: KEY, load: load, save: save, clear: clear, count: count, available: function () { return !!store(); } };
@@ -300,7 +314,17 @@ window.Reports.s4 = async function s4(wb) {
     return m ? (order[m[1]] || 99) : 99;
   }
   var sortedHistory = history.slice().sort(function (a, b) { return periodSortKey(a.Month) - periodSortKey(b.Month); });
-  var graphHistory = sortedHistory.slice(-3);
+  // The dashboard is "as on" the period THIS file describes. A stored period
+  // that falls after it came from some other export and cannot belong here —
+  // left in, it takes one of the three chart columns and pushes a real period
+  // (Q1) off the left edge, which is how a May report came to show Apr/May/Jul.
+  // The row stays in storage; it is not wrong, just not this report. This makes
+  // the chart a function of the file alone, whatever else storage happens to
+  // hold, so the same workbook always renders the same three periods.
+  var currentKey = periodSortKey(periodLabel);
+  var laterPeriods = sortedHistory.filter(function (r) { return periodSortKey(r.Month) > currentKey; })
+    .map(function (r) { return r.Month; });
+  var graphHistory = sortedHistory.filter(function (r) { return periodSortKey(r.Month) <= currentKey; }).slice(-3);
   var periodLabels = graphHistory.map(function (r) { return r.Month; });
   var targetForTable = Math.round(totalRisk * TARGET_PERCENT);
 
@@ -557,7 +581,9 @@ window.Reports.s4 = async function s4(wb) {
     'History loaded from: ' + historySource,
     'History store: ' + storageNote,
     'Periods in chart: ' + periodLabels.join(', ') + '  (latest 3 of ' + history.length + ')',
-  ].join('\n');
+  ].concat(laterPeriods.length
+    ? ['Held but not charted: ' + laterPeriods.join(', ') + '  (later than ' + periodLabel + ', this file\'s period)']
+    : []).join('\n');
 
   return {
     ok: true,
