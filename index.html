@@ -758,6 +758,10 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
       <span class="prp-badge prp-badge-py ready">Ready</span>
       <span class="prp-badge prp-badge-hide"><strong>7</strong> reports</span>
       <span class="prp-badge prp-badge-hide">Runs offline</span>
+      <!-- Build stamp. This file is downloaded and double-clicked, so a stale
+           copy is invisible: "I re-ran it and it still shows 0%" reads exactly
+           like "I re-ran the old file". Bump PRP_BUILD on every release. -->
+      <span class="prp-badge prp-badge-hide" id="prp-build" title="Build date of this file"></span>
     </div>
   </div>
 
@@ -854,6 +858,14 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 
 
 <script>
+// Build stamp — bump on every release. Rendered into the header badge so the
+// running copy identifies itself; without it a stale download is undetectable.
+window.PRP_BUILD = '2026-07-27';
+(function () {
+  var el = document.getElementById('prp-build');
+  if (el) el.textContent = 'build ' + window.PRP_BUILD;
+})();
+
 // ── Inlined: report-engine.js ─────────────────────────────────────────────
 window.Reports = window.Reports || {};
 window.ReportEngine = (function () {
@@ -2108,9 +2120,39 @@ window.Reports.d2 = async function d2(wb) {
 
   var sheet = E.readSheet(wb, 'OneTrust Assessment');
   var rawHeaders = sheet.headers.map(function (h) { return String(h).trim(); });
+
+  // Two columns can carry the same header. An export that gained a replacement
+  // "Tags" keeps the original beside it, usually empty. readSheet dedupes the
+  // row KEYS (Tags, Tags_1) but this loop re-keyed by the raw header, so both
+  // positions wrote out['Tags'] = row['Tags'] and the populated second column
+  // was unreachable — tagOnly went to 0 under any matching rule, with no error.
+  // Take the first position that actually holds a value for this row.
+  //
+  // Not a matching-rule change: on a sheet with one column per name this picks
+  // that same column, so literal parity with the script is untouched. Duplicates
+  // are counted and named in the run summary rather than quietly worked around.
+  // sheet_to_json dedupes repeated keys by occurrence: the 2nd "Tags" becomes
+  // "Tags_1", the 3rd "Tags_2". Rebuild that mapping so every position is
+  // addressable, then keep the first non-blank one per name.
+  var seenHeader = {}, rowKeys = [], dupHeaders = [];
+  sheet.headers.forEach(function (h) {
+    var n = seenHeader[h] || 0;
+    seenHeader[h] = n + 1;
+    rowKeys.push(n === 0 ? h : h + '_' + n);
+  });
+  Object.keys(seenHeader).forEach(function (h) {
+    if (seenHeader[h] > 1) dupHeaders.push(String(h).trim() + ' x' + seenHeader[h]);
+  });
+
+  function blankCell(v) { return v === undefined || v === null || v === ''; }
   var rows = sheet.rows.map(function (row) {
     var out = {};
-    sheet.headers.forEach(function (h, i) { out[rawHeaders[i]] = row[h]; });
+    rowKeys.forEach(function (key, i) {
+      var name = rawHeaders[i];
+      var v = row[key];
+      if (v === undefined) v = row[sheet.headers[i]];
+      if (!(name in out) || (blankCell(out[name]) && !blankCell(v))) out[name] = v;
+    });
     return out;
   });
   // Report every missing column at once — naming them one run at a time turns
@@ -2291,12 +2333,17 @@ window.Reports.d2 = async function d2(wb) {
 
   var q2Reason = !recordTotal ? 'nothing passed the filter — the 0% is not a measurement'
     : (!closedTotal ? 'rows passed the filter, none are at a Closed stage' : '');
-  var stdout = [
+  var lines = [
     'SUCCESS',
     'output file D2.xlsx',
     '',
     'Input file: ' + ((wb && wb.__fileName) || 'workbook.xlsx'),
     'Sheet: OneTrust Assessment',
+  ];
+  if (dupHeaders.length) {
+    lines.push('Duplicate columns: ' + dupHeaders.join(', ') + '   (first non-blank value per row is used)');
+  }
+  lines.push(
     '',
     'Filter (Tags whole-cell "cyber", case-insensitive; Date created year 2026):',
     '  Rows read:            ' + rows.length,
@@ -2308,16 +2355,19 @@ window.Reports.d2 = async function d2(wb) {
     '  Closed: ' + closedTotal,
     '  Open:   ' + (recordTotal - closedTotal),
     '',
-    "Q2 '26 = Closed / Kept = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%',
-  ].concat(q2Reason ? ['  ^ ' + q2Reason] : []).concat([
+    "Q2 '26 = Closed / Kept = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%'
+  );
+  if (q2Reason) lines.push('  ^ ' + q2Reason);
+  lines.push(
     '',
     'Values present in the file:',
     '  Tags:         ' + distinct(rows.map(function (r) { return r.Tags; }), 8),
     '  Stage:        ' + distinct((recordTotal ? filtered : rows).map(function (r) { return r.Stage; }), 8) +
       (recordTotal ? '   (kept rows)' : '   (whole sheet — nothing passed the filter)'),
     '  Date created: ' + distinct(yearsSeen, 8) +
-      (unparsedDates ? '   — ' + unparsedDates + ' cell(s) could not be read as a date' : ''),
-  ]).join('\n');
+      (unparsedDates ? '   — ' + unparsedDates + ' cell(s) could not be read as a date' : '')
+  );
+  var stdout = lines.join('\n');
 
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
@@ -3449,9 +3499,32 @@ window.Reports.s4 = async function s4(wb) {
   }
   var sheet = E.readSheet(wb, SHEET_NAME);
   var cleanedHeaders = sheet.headers.map(clean);
+
+  // Two columns can carry the same header — an export that gained a replacement
+  // "Stage" keeps the original beside it, usually empty. sheet_to_json dedupes
+  // the row KEYS by occurrence (Stage, Stage_1), but re-keying by the cleaned
+  // header collapsed them so only the FIRST was ever readable; a populated
+  // second column was invisible and every stage lookup missed, with no error.
+  // Rebuild that key mapping and keep the first non-blank value per row.
+  var seenHeader = {}, rowKeys = [], dupHeaders = [];
+  sheet.headers.forEach(function (h) {
+    var n = seenHeader[h] || 0;
+    seenHeader[h] = n + 1;
+    rowKeys.push(n === 0 ? h : h + '_' + n);
+  });
+  Object.keys(seenHeader).forEach(function (h) {
+    if (seenHeader[h] > 1) dupHeaders.push(clean(h) + ' x' + seenHeader[h]);
+  });
+
+  function blankCell(v) { return v === undefined || v === null || v === ''; }
   var rows = sheet.rows.map(function (row) {
     var out = {};
-    sheet.headers.forEach(function (h, i) { out[cleanedHeaders[i]] = row[h]; });
+    rowKeys.forEach(function (key, i) {
+      var name = cleanedHeaders[i];
+      var v = row[key];
+      if (v === undefined) v = row[sheet.headers[i]];
+      if (!(name in out) || (blankCell(out[name]) && !blankCell(v))) out[name] = v;
+    });
     return out;
   });
 
@@ -3845,6 +3918,8 @@ window.Reports.s4 = async function s4(wb) {
     // Everything below is browser-side context — it explains the label rather
     // than changing it. The tally matters most: it shows which month the period
     // came from and, when a later month was ignored, that the rows exist.
+    'Duplicate columns: ' + (dupHeaders.length
+      ? dupHeaders.join(', ') + '   (first non-blank value per row is used)' : 'none'),
     'Reporting period: ' + MONTH_ABBR[chosenMonth - 1] + ' — the last month in ' +
       dateCreatedCol + ' / ' + dateClosedCol + ' holding at least ' + periodFloor + ' rows',
     'Dates by month in file: ' + monthTally.join(', ') +
@@ -4225,9 +4300,15 @@ function renderResults() {
     }
   });
 
-  // Log
-  html += '<details class="log-details glass ring"' + (d.ok ? '' : ' open') + '>' +
-          '<summary>Script log &nbsp;&middot;&nbsp; stdout / stderr</summary>' +
+  // Log. Opened when the run failed, and also when a report flags a number it
+  // could not vouch for — a report marks that with a "  ^ " line in stdout.
+  // A KPI of 0% that means "the filter matched nothing" is indistinguishable
+  // from a real 0% on the chart, and behind a collapsed panel the explanation
+  // went unread through four rounds of bug reports.
+  var flagged = /^\s*\^ /m.test(d.stdout || '');
+  html += '<details class="log-details glass ring"' + (d.ok && !flagged ? '' : ' open') + '>' +
+          '<summary>Script log &nbsp;&middot;&nbsp; stdout / stderr' +
+          (flagged ? ' &nbsp;&middot;&nbsp; <strong>check this</strong>' : '') + '</summary>' +
           '<div class="log-content">';
   if (d.stdout && d.stdout.trim()) {
     html += '<pre class="log-code">' + esc(d.stdout) + '</pre>';

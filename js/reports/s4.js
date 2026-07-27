@@ -119,9 +119,32 @@ window.Reports.s4 = async function s4(wb) {
   }
   var sheet = E.readSheet(wb, SHEET_NAME);
   var cleanedHeaders = sheet.headers.map(clean);
+
+  // Two columns can carry the same header — an export that gained a replacement
+  // "Stage" keeps the original beside it, usually empty. sheet_to_json dedupes
+  // the row KEYS by occurrence (Stage, Stage_1), but re-keying by the cleaned
+  // header collapsed them so only the FIRST was ever readable; a populated
+  // second column was invisible and every stage lookup missed, with no error.
+  // Rebuild that key mapping and keep the first non-blank value per row.
+  var seenHeader = {}, rowKeys = [], dupHeaders = [];
+  sheet.headers.forEach(function (h) {
+    var n = seenHeader[h] || 0;
+    seenHeader[h] = n + 1;
+    rowKeys.push(n === 0 ? h : h + '_' + n);
+  });
+  Object.keys(seenHeader).forEach(function (h) {
+    if (seenHeader[h] > 1) dupHeaders.push(clean(h) + ' x' + seenHeader[h]);
+  });
+
+  function blankCell(v) { return v === undefined || v === null || v === ''; }
   var rows = sheet.rows.map(function (row) {
     var out = {};
-    sheet.headers.forEach(function (h, i) { out[cleanedHeaders[i]] = row[h]; });
+    rowKeys.forEach(function (key, i) {
+      var name = cleanedHeaders[i];
+      var v = row[key];
+      if (v === undefined) v = row[sheet.headers[i]];
+      if (!(name in out) || (blankCell(out[name]) && !blankCell(v))) out[name] = v;
+    });
     return out;
   });
 
@@ -515,6 +538,8 @@ window.Reports.s4 = async function s4(wb) {
     // Everything below is browser-side context — it explains the label rather
     // than changing it. The tally matters most: it shows which month the period
     // came from and, when a later month was ignored, that the rows exist.
+    'Duplicate columns: ' + (dupHeaders.length
+      ? dupHeaders.join(', ') + '   (first non-blank value per row is used)' : 'none'),
     'Reporting period: ' + MONTH_ABBR[chosenMonth - 1] + ' — the last month in ' +
       dateCreatedCol + ' / ' + dateClosedCol + ' holding at least ' + periodFloor + ' rows',
     'Dates by month in file: ' + monthTally.join(', ') +

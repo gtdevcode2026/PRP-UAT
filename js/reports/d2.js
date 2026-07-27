@@ -16,9 +16,39 @@ window.Reports.d2 = async function d2(wb) {
 
   var sheet = E.readSheet(wb, 'OneTrust Assessment');
   var rawHeaders = sheet.headers.map(function (h) { return String(h).trim(); });
+
+  // Two columns can carry the same header. An export that gained a replacement
+  // "Tags" keeps the original beside it, usually empty. readSheet dedupes the
+  // row KEYS (Tags, Tags_1) but this loop re-keyed by the raw header, so both
+  // positions wrote out['Tags'] = row['Tags'] and the populated second column
+  // was unreachable — tagOnly went to 0 under any matching rule, with no error.
+  // Take the first position that actually holds a value for this row.
+  //
+  // Not a matching-rule change: on a sheet with one column per name this picks
+  // that same column, so literal parity with the script is untouched. Duplicates
+  // are counted and named in the run summary rather than quietly worked around.
+  // sheet_to_json dedupes repeated keys by occurrence: the 2nd "Tags" becomes
+  // "Tags_1", the 3rd "Tags_2". Rebuild that mapping so every position is
+  // addressable, then keep the first non-blank one per name.
+  var seenHeader = {}, rowKeys = [], dupHeaders = [];
+  sheet.headers.forEach(function (h) {
+    var n = seenHeader[h] || 0;
+    seenHeader[h] = n + 1;
+    rowKeys.push(n === 0 ? h : h + '_' + n);
+  });
+  Object.keys(seenHeader).forEach(function (h) {
+    if (seenHeader[h] > 1) dupHeaders.push(String(h).trim() + ' x' + seenHeader[h]);
+  });
+
+  function blankCell(v) { return v === undefined || v === null || v === ''; }
   var rows = sheet.rows.map(function (row) {
     var out = {};
-    sheet.headers.forEach(function (h, i) { out[rawHeaders[i]] = row[h]; });
+    rowKeys.forEach(function (key, i) {
+      var name = rawHeaders[i];
+      var v = row[key];
+      if (v === undefined) v = row[sheet.headers[i]];
+      if (!(name in out) || (blankCell(out[name]) && !blankCell(v))) out[name] = v;
+    });
     return out;
   });
   // Report every missing column at once — naming them one run at a time turns
@@ -199,12 +229,17 @@ window.Reports.d2 = async function d2(wb) {
 
   var q2Reason = !recordTotal ? 'nothing passed the filter — the 0% is not a measurement'
     : (!closedTotal ? 'rows passed the filter, none are at a Closed stage' : '');
-  var stdout = [
+  var lines = [
     'SUCCESS',
     'output file D2.xlsx',
     '',
     'Input file: ' + ((wb && wb.__fileName) || 'workbook.xlsx'),
     'Sheet: OneTrust Assessment',
+  ];
+  if (dupHeaders.length) {
+    lines.push('Duplicate columns: ' + dupHeaders.join(', ') + '   (first non-blank value per row is used)');
+  }
+  lines.push(
     '',
     'Filter (Tags whole-cell "cyber", case-insensitive; Date created year 2026):',
     '  Rows read:            ' + rows.length,
@@ -216,16 +251,19 @@ window.Reports.d2 = async function d2(wb) {
     '  Closed: ' + closedTotal,
     '  Open:   ' + (recordTotal - closedTotal),
     '',
-    "Q2 '26 = Closed / Kept = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%',
-  ].concat(q2Reason ? ['  ^ ' + q2Reason] : []).concat([
+    "Q2 '26 = Closed / Kept = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%'
+  );
+  if (q2Reason) lines.push('  ^ ' + q2Reason);
+  lines.push(
     '',
     'Values present in the file:',
     '  Tags:         ' + distinct(rows.map(function (r) { return r.Tags; }), 8),
     '  Stage:        ' + distinct((recordTotal ? filtered : rows).map(function (r) { return r.Stage; }), 8) +
       (recordTotal ? '   (kept rows)' : '   (whole sheet — nothing passed the filter)'),
     '  Date created: ' + distinct(yearsSeen, 8) +
-      (unparsedDates ? '   — ' + unparsedDates + ' cell(s) could not be read as a date' : ''),
-  ]).join('\n');
+      (unparsedDates ? '   — ' + unparsedDates + ' cell(s) could not be read as a date' : '')
+  );
+  var stdout = lines.join('\n');
 
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
