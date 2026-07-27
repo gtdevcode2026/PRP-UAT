@@ -79,30 +79,53 @@ window.Reports.d2 = async function d2(wb) {
     ['Organization', 'Stage', 'Tags'].forEach(function (c) { r[c] = pyStrip(r[c]); });
   });
 
-  // df["Tags"].str.contains(r"(?i)^cyber$", na=False)
+  // ── Matching: tolerant by default, but it tells you when it was tolerant ──
   //
-  // Anchored at both ends, so this is a whole-cell match: a delimited cell such
-  // as "Cyber, Third Party" does NOT match. That is the script's rule and it is
-  // load-bearing — matching per tag instead counts rows the reference output
-  // does not. Counted per predicate as well as combined, because when the
-  // result is zero the only useful question is which half rejected everything;
-  // those counts feed the run summary at the end.
-  var tagOnly = 0, yearOnly = 0;
-  var filtered = rows.filter(function (r) {
-    var tagMatch = /^cyber$/i.test(r.Tags);
-    var yearMatch = E.excelYear(r['Date created']) === 2026;
-    if (tagMatch) tagOnly++;
-    if (yearMatch) yearOnly++;
-    return tagMatch && yearMatch;
-  });
+  // The script's rules are exact: a whole-cell (?i)^cyber$ on Tags and an
+  // exact-case {Completed, Under review} on Stage. They are right for the
+  // reference workbook and wrong for a real OneTrust export, where Tags is a
+  // delimited list ("Cyber, Third Party") and Stage casing drifts ("Under
+  // Review"). Held strictly the report publishes a confident 0%; relaxed
+  // silently it stops being a reproduction of the reference output.
+  //
+  // Both fallbacks are semantically safe — they can only admit rows a human
+  // would agree are matches. Per-tag equality still rejects "Cyber Security"
+  // (a different tag, not a delimiter away); case-folding still rejects any
+  // stage that is not one of the two closed ones.
+  var TAG_STRICT = function (tags) { return /^cyber$/i.test(tags); };
+  var TAG_LOOSE = function (tags) {
+    return String(tags).split(/[,;|\/\n]+/).some(function (t) { return /^cyber$/i.test(t.trim()); });
+  };
+  var STAGE_STRICT = function (s) { return s === 'Completed' || s === 'Under review'; };
+  var STAGE_LOOSE = function (s) { return /^(completed|under review)$/i.test(String(s).trim()); };
 
-  // closed_stages = {"Completed", "Under review"} — exact case, as the script
-  // has it. "Under Review" with a capital R counts as Open here, exactly as it
-  // does in Python.
-  var CLOSED_STAGES = { 'Completed': 1, 'Under review': 1 };
-  filtered.forEach(function (r) {
-    r['Final Stage'] = CLOSED_STAGES.hasOwnProperty(r.Stage) ? 'Closed' : 'Open';
-  });
+  var yearOf = function (r) { return E.excelYear(r['Date created']); };
+  var yearOnly = rows.filter(function (r) { return yearOf(r) === 2026; }).length;
+
+  // Match with the looser rule, then check whether it actually admitted anything
+  // the script's own rule would have rejected. When it did not — every file the
+  // script handles — the result IS the script's result and is reported as such.
+  // When it did, the numbers are real but no longer a like-for-like reproduction
+  // of the reference output, so the run says which rule produced them.
+  //
+  // Checking "did the looser rule admit extra rows" rather than "did the strict
+  // rule find nothing" is what catches the partial case: an export where
+  // "Completed" still matches exactly but "Under Review" does not would
+  // otherwise keep half its closed rows and publish a quietly wrong figure.
+  var tagHits = rows.filter(function (r) { return TAG_LOOSE(r.Tags); });
+  var tagLoosened = tagHits.some(function (r) { return !TAG_STRICT(r.Tags); });
+  var tagOnly = tagHits.length;
+
+  var filtered = tagHits.filter(function (r) { return yearOf(r) === 2026; });
+  var stageLoosened = filtered.some(function (r) { return STAGE_LOOSE(r.Stage) && !STAGE_STRICT(r.Stage); });
+  filtered.forEach(function (r) { r['Final Stage'] = STAGE_LOOSE(r.Stage) ? 'Closed' : 'Open'; });
+
+  var TAG_RULE = tagLoosened
+    ? 'per tag after splitting on , ; | / and newlines   (LOOSENED — the script matches the whole cell)'
+    : 'whole cell = "cyber", case-insensitive   (the script\'s rule)';
+  var STAGE_RULE = stageLoosened
+    ? 'Completed / Under review, case-insensitive   (LOOSENED — the script is exact-case)'
+    : 'exact case {Completed, Under review}   (the script\'s rule)';
 
   var ORG_MAP = {
     'Africa': 'AFR', 'APAC': 'APAC', 'BEES': 'GRO', 'BEES | FINTECH': 'GRO',
@@ -241,19 +264,31 @@ window.Reports.d2 = async function d2(wb) {
   }
   lines.push(
     '',
-    'Filter (Tags whole-cell "cyber", case-insensitive; Date created year 2026):',
+    'Tags rule:  ' + TAG_RULE,
+    'Stage rule: ' + STAGE_RULE,
+    '',
+    'Filter (Tags, and Date created year 2026):',
     '  Rows read:            ' + rows.length,
     '  Tags = Cyber:         ' + tagOnly,
     '  Date created in 2026: ' + yearOnly,
     '  Kept (both):          ' + recordTotal,
     '',
-    'Stage of the kept rows (Closed = Completed / Under review, exact case):',
+    'Stage of the kept rows:',
     '  Closed: ' + closedTotal,
     '  Open:   ' + (recordTotal - closedTotal),
     '',
     "Q2 '26 = Closed / Kept = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%'
   );
   if (q2Reason) lines.push('  ^ ' + q2Reason);
+  // A number produced by anything other than the script's own rule is still
+  // correct, but it is no longer a like-for-like reproduction of the reference
+  // output — so it is flagged, not slipped through. The "  ^ " prefix is what
+  // makes the shell open the Script log by itself.
+  if (tagLoosened || stageLoosened) {
+    lines.push('  ^ The script\'s exact rule matched nothing here, so a looser one was used' +
+      ' (see "Tags rule" / "Stage rule" above). The numbers are real; they will not match a' +
+      ' run of the Python script on this same file.');
+  }
   lines.push(
     '',
     'Values present in the file:',
