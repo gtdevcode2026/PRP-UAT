@@ -44,12 +44,25 @@ window.Reports.d2 = async function d2(wb) {
     ['Organization', 'Stage', 'Tags'].forEach(function (c) { r[c] = clean(r[c]); });
   });
 
-  // Step 7: Tags equals "Cyber" (case-insensitive) AND Date created in 2026.
+  // Step 7: Tags equals "Cyber" (case-insensitive), applied PER TAG.
+  //
+  // OneTrust renders Tags as a delimited list, so a cyber assessment arrives as
+  // "Cyber" on some rows and "Cyber, Third Party" on others. A multi-value cell
+  // can never *equal* "Cyber", which is how the whole filter came to match
+  // nothing on a real export. Splitting first keeps the spec's rule intact —
+  // each tag is still compared for equality, never substring, so "Cyber
+  // Security" is still not a match — without depending on the cell holding
+  // exactly one tag. Strictly additive: a single-tag "Cyber" cell matched
+  // before and still does, so no correct result can change.
+  function hasCyberTag(tags) {
+    return String(tags).split(/[,;|\n]+/).some(function (t) { return /^cyber$/i.test(t.trim()); });
+  }
+
   // Counted per-predicate as well as combined, because when the result is zero
   // the only useful question is WHICH half rejected everything.
   var tagOnly = 0, yearOnly = 0;
   var filtered = rows.filter(function (r) {
-    var tagMatch = /^cyber$/i.test(r.Tags);
+    var tagMatch = hasCyberTag(r.Tags);
     var yearMatch = E.excelYear(r['Date created']) === 2026;
     if (tagMatch) tagOnly++;
     if (yearMatch) yearOnly++;
