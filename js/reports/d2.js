@@ -28,57 +28,50 @@ window.Reports.d2 = async function d2(wb) {
   });
   if (missing.length) throw new Error('Missing required columns: ' + missing.join(', '));
 
-  // Exports carry invisible characters that survive a plain trim: zero-width
-  // spaces/joiners, BOM, and non-breaking spaces between words. They make a
-  // cell that reads as "Cyber" fail an equality test against "cyber" for no
-  // visible reason, so strip them before anything compares these values.
-  function clean(v) {
-    if (E.isBlank(v)) return '';
-    return String(v)
-      .replace(/[​-‍﻿]/g, '')
-      .replace(/[   ]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+  // df[c] = df[c].fillna("").astype(str).str.strip()
+  //
+  // Deliberately no more than that. An earlier version also stripped zero-width
+  // characters and folded NBSP, which made this report accept rows the script
+  // rejects; the requirement is literal parity, so the cleaning matches pandas
+  // exactly. E.isBlank is NOT used here — it treats the literal string "nan" as
+  // blank, which fillna does not.
+  //
+  // One residual difference, stated rather than hidden: JS trim() also strips
+  // U+FEFF (BOM), while Python's str.strip() does not — BOM is a format
+  // character, not whitespace. A BOM-prefixed "Cyber" cell therefore matches
+  // here and would not in the script.
+  function pyStrip(v) {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'number' && Number.isNaN(v)) return '';
+    return String(v).trim();
   }
   rows.forEach(function (r) {
-    ['Organization', 'Stage', 'Tags'].forEach(function (c) { r[c] = clean(r[c]); });
+    ['Organization', 'Stage', 'Tags'].forEach(function (c) { r[c] = pyStrip(r[c]); });
   });
 
-  // Step 7: Tags equals "Cyber" (case-insensitive), applied PER TAG.
+  // df["Tags"].str.contains(r"(?i)^cyber$", na=False)
   //
-  // OneTrust renders Tags as a delimited list, so a cyber assessment arrives as
-  // "Cyber" on some rows and "Cyber, Third Party" on others. A multi-value cell
-  // can never *equal* "Cyber", which is how the whole filter came to match
-  // nothing on a real export. Splitting first keeps the spec's rule intact —
-  // each tag is still compared for equality, never substring, so "Cyber
-  // Security" is still not a match — without depending on the cell holding
-  // exactly one tag. Strictly additive: a single-tag "Cyber" cell matched
-  // before and still does, so no correct result can change.
-  function hasCyberTag(tags) {
-    return String(tags).split(/[,;|\n]+/).some(function (t) { return /^cyber$/i.test(t.trim()); });
-  }
-
-  // Counted per-predicate as well as combined, because when the result is zero
-  // the only useful question is WHICH half rejected everything.
+  // Anchored at both ends, so this is a whole-cell match: a delimited cell such
+  // as "Cyber, Third Party" does NOT match. That is the script's rule and it is
+  // load-bearing — matching per tag instead counts rows the reference output
+  // does not. Counted per predicate as well as combined, because when the
+  // result is zero the only useful question is which half rejected everything;
+  // those counts feed the run summary at the end.
   var tagOnly = 0, yearOnly = 0;
   var filtered = rows.filter(function (r) {
-    var tagMatch = hasCyberTag(r.Tags);
+    var tagMatch = /^cyber$/i.test(r.Tags);
     var yearMatch = E.excelYear(r['Date created']) === 2026;
     if (tagMatch) tagOnly++;
     if (yearMatch) yearOnly++;
     return tagMatch && yearMatch;
   });
 
-  // Stage is matched case-insensitively for the same reason Tags is: OneTrust
-  // exports the label with inconsistent casing ("Under review" / "Under
-  // Review"), and an exact-case set silently reclassifies every variant as
-  // Open. That is the second way this report can pass its filter on a real
-  // export and still publish a confident 0% — the rows are there, none of them
-  // are Closed. No two genuine stages differ only by case, so nothing that
-  // counted as Closed before can stop counting.
-  var CLOSED_STAGES = { 'completed': 1, 'under review': 1 };
+  // closed_stages = {"Completed", "Under review"} — exact case, as the script
+  // has it. "Under Review" with a capital R counts as Open here, exactly as it
+  // does in Python.
+  var CLOSED_STAGES = { 'Completed': 1, 'Under review': 1 };
   filtered.forEach(function (r) {
-    r['Final Stage'] = CLOSED_STAGES.hasOwnProperty(String(r.Stage).toLowerCase()) ? 'Closed' : 'Open';
+    r['Final Stage'] = CLOSED_STAGES.hasOwnProperty(r.Stage) ? 'Closed' : 'Open';
   });
 
   var ORG_MAP = {
@@ -129,15 +122,14 @@ window.Reports.d2 = async function d2(wb) {
   var closedTotal = filtered.filter(function (r) { return r['Final Stage'] === 'Closed'; }).length;
   var recordTotal = filtered.length;
   var q2_26 = recordTotal ? pyRound2(closedTotal / recordTotal) : 0;
-  // A 0% here is either a real measurement or the filter finding nothing, and
-  // the chart renders both identically. Say which, in the cell that sits beside
-  // the value, so the number is never published without its reason.
-  var q2Remark = !recordTotal ? 'no rows matched Tags=Cyber + 2026 — see Diagnostics below'
-    : (!closedTotal ? 'rows matched, none at a Closed stage — see Diagnostics below' : '');
+  // kpi_data — the Q2 remark is the script's empty string. A 0% here is either
+  // a real measurement or the filter finding nothing, and the two look
+  // identical; that distinction is reported in the run summary at the end
+  // instead, which is browser-only and cannot alter the workbook.
   var KPI = [
     ["Baseline '25", 0.60, 'static'],
     ["Q1 '26", 0.32, 'static'],
-    ["Q2 '26", q2_26, q2Remark],
+    ["Q2 '26", q2_26, ''],
     ["Target '26", 0.65, 'static'],
   ];
 
@@ -175,18 +167,16 @@ window.Reports.d2 = async function d2(wb) {
   setCell(grid, noteRow, 1, 'Q2 formula');
   setCell(grid, noteRow, 2, 'Closed / Grand Total = ' + closedTotal + ' / ' + recordTotal);
 
-  // ── Diagnostics ──
+  // ── Run summary (returned as stdout, NOT written to the sheet) ──
   // Q2 is a ratio over the filtered set, so when the filter matches nothing it
-  // reports a confident "0%" that is indistinguishable from a real measurement.
-  // These four rows make the difference visible: they say how many rows each
-  // half of the Step 7 filter accepted, and — decisively — what the rejected
-  // values actually look like, so one client run identifies the cause instead
-  // of requiring another round trip.
+  // reports a confident "0%" indistinguishable from a real measurement. These
+  // lines say how many rows each half of the filter accepted and what the
+  // rejected values look like, so one client run identifies the cause.
   //
-  // Written across all four columns on purpose. ReportEngine.trimSparseCols
-  // drops any column filled in fewer than half the surviving rows, and column D
-  // ("Grand Total") sits close to that line; a block of 2-cell rows would push
-  // it under and silently delete a column from the in-app preview table.
+  // This used to be a block of cells below the note row. It moved here so the
+  // Dashboard sheet is a literal reproduction of the openpyxl output — stdout
+  // has no counterpart in the script and cannot change the workbook. The shell
+  // renders it in the "Script log" panel; s4 already returns stdout the same way.
   function distinct(values, limit) {
     var seen = [], counts = {};
     values.forEach(function (v) {
@@ -195,7 +185,7 @@ window.Reports.d2 = async function d2(wb) {
       counts[k]++;
     });
     seen.sort(function (a, b) { return counts[b] - counts[a]; });
-    var shown = seen.slice(0, limit).map(function (k) { return k + ' ×' + counts[k]; });
+    var shown = seen.slice(0, limit).map(function (k) { return k + ' x' + counts[k]; });
     if (seen.length > limit) shown.push('+' + (seen.length - limit) + ' more');
     return shown.join('  ·  ') || '(none)';
   }
@@ -207,31 +197,36 @@ window.Reports.d2 = async function d2(wb) {
     return String(y);
   });
 
-  var diagRow = noteRow + 2;
-  ['Diagnostics', 'Rows read', 'Tags = Cyber', 'Created in 2026'].forEach(function (h, i) {
-    setCell(grid, diagRow, i + 1, h);
-  });
-  setCell(grid, diagRow + 1, 1, 'Rows matching');
-  setCell(grid, diagRow + 1, 2, rows.length);
-  setCell(grid, diagRow + 1, 3, tagOnly);
-  setCell(grid, diagRow + 1, 4, yearOnly);
-  // The filter counts alone cannot explain a 0% when the filter DID match, so
-  // carry the split that actually feeds the KPI: Q2 is Closed / Rows kept.
-  ['Stage split', 'Rows kept', 'Closed', 'Open'].forEach(function (h, i) {
-    setCell(grid, diagRow + 2, i + 1, h);
-  });
-  setCell(grid, diagRow + 3, 1, 'Counts');
-  setCell(grid, diagRow + 3, 2, recordTotal);
-  setCell(grid, diagRow + 3, 3, closedTotal);
-  setCell(grid, diagRow + 3, 4, recordTotal - closedTotal);
-  setCell(grid, diagRow + 4, 1, 'Stages seen');
-  setCell(grid, diagRow + 4, 2, distinct((recordTotal ? filtered : rows).map(function (r) { return r.Stage; }), 6) +
-    (recordTotal ? '' : '  (whole sheet — nothing passed the filter)'));
-  setCell(grid, diagRow + 5, 1, 'Tags seen');
-  setCell(grid, diagRow + 5, 2, distinct(rows.map(function (r) { return r.Tags; }), 6));
-  setCell(grid, diagRow + 6, 1, 'Date created seen');
-  setCell(grid, diagRow + 6, 2, distinct(yearsSeen, 6) +
-    (unparsedDates ? '  — ' + unparsedDates + ' cell(s) could not be read as a date' : ''));
+  var q2Reason = !recordTotal ? 'nothing passed the filter — the 0% is not a measurement'
+    : (!closedTotal ? 'rows passed the filter, none are at a Closed stage' : '');
+  var stdout = [
+    'SUCCESS',
+    'output file D2.xlsx',
+    '',
+    'Input file: ' + ((wb && wb.__fileName) || 'workbook.xlsx'),
+    'Sheet: OneTrust Assessment',
+    '',
+    'Filter (Tags whole-cell "cyber", case-insensitive; Date created year 2026):',
+    '  Rows read:            ' + rows.length,
+    '  Tags = Cyber:         ' + tagOnly,
+    '  Date created in 2026: ' + yearOnly,
+    '  Kept (both):          ' + recordTotal,
+    '',
+    'Stage of the kept rows (Closed = Completed / Under review, exact case):',
+    '  Closed: ' + closedTotal,
+    '  Open:   ' + (recordTotal - closedTotal),
+    '',
+    "Q2 '26 = Closed / Kept = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%',
+  ].concat(q2Reason ? ['  ^ ' + q2Reason] : []).concat([
+    '',
+    'Values present in the file:',
+    '  Tags:         ' + distinct(rows.map(function (r) { return r.Tags; }), 8),
+    '  Stage:        ' + distinct((recordTotal ? filtered : rows).map(function (r) { return r.Stage; }), 8) +
+      (recordTotal ? '   (kept rows)' : '   (whole sheet — nothing passed the filter)'),
+    '  Date created: ' + distinct(yearsSeen, 8) +
+      (unparsedDates ? '   — ' + unparsedDates + ' cell(s) could not be read as a date' : ''),
+  ]).join('\n');
+
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
 
@@ -338,23 +333,14 @@ window.Reports.d2 = async function d2(wb) {
   });
   style(noteRow, 1, { bold: true });
 
-  // Diagnostics block: same header treatment as the tables above it.
-  for (var dc = 1; dc <= 4; dc++) {
-    style(diagRow, dc, { fill: HEADER_FILL, bold: true, border: true, center: dc > 1 });
-    style(diagRow + 1, dc, { border: true, center: dc > 1 });
-    style(diagRow + 2, dc, { fill: HEADER_FILL, bold: true, border: true, center: dc > 1 });
-    style(diagRow + 3, dc, { border: true, center: dc > 1 });
-  }
-  for (var dr = 4; dr <= 6; dr++) style(diagRow + dr, 1, { bold: true });
-
   // Column widths (A-M), uniform row heights, and freeze_panes = "A5" — which
   // is a 4-row vertical split, so the pivot header stays put while scrolling.
   var WIDTHS = [18, 12, 12, 14, 4, 14, 14, 14, 14, 14, 14, 14, 14];
   WIDTHS.forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
-  // Cover the whole sheet plus the chart anchors below it. Derived rather than
-  // hardcoded: the grid grows with the number of zones in the client's data.
-  var lastStyledRow = Math.max(49, grid.length);
-  for (var rh = 1; rh <= lastStyledRow; rh++) ws.getRow(rh).height = 22;
+  // for row in range(1, 50) — rows 1..49, not "as many rows as the grid has".
+  // With enough zones the table can now run past row 49 unstyled, exactly as it
+  // does in the script.
+  for (var rh = 1; rh <= 49; rh++) ws.getRow(rh).height = 22;
   ws.views = [{ state: 'frozen', xSplit: 0, ySplit: startRow }];
 
   // Native, editable charts (data-linked to hidden helper blocks) replace the
@@ -411,6 +397,7 @@ window.Reports.d2 = async function d2(wb) {
 
   return {
     ok: true,
+    stdout: stdout,
     files: [{ name: 'output file D2.xlsx', bytes: buf, sheets: [{ name: 'Dashboard', grid: grid }] }],
     chartImages: { 'Dashboard': images.org },
   };
