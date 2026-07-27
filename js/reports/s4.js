@@ -92,6 +92,10 @@ window.Reports.s4 = async function s4(wb) {
   var BASELINE_OPEN_RISK = 536, BASELINE_CLOSED_RISK = 42, BASELINE_TOTAL_RISK = 578;
   var TARGET_LABEL = "Target '26";
   var TARGET_PERCENT = 0.80;
+  // A month must hold at least this share of the year's dated rows before it can
+  // name the reporting period — see getPeriodLabel. Mirrors PERIOD_MIN_SHARE in
+  // diagram4/automation.py; change both together.
+  var PERIOD_MIN_SHARE = 0.05;
   var SEED_HISTORY_WHEN_MISSING = true;
   var SEED_ROWS = [
     { Month: "Q1 '26", 'Open risk as on date': 655, 'Closed Risk in 2026': 41, 'Total Risk': 696, 'Risk Created in 2026': 118 },
@@ -146,38 +150,42 @@ window.Reports.s4 = async function s4(wb) {
   var riskCreated = rows.filter(function (r) { return E.excelYear(r[dateCreatedCol]) === YEAR; }).length;
   var targetValue = Math.round(totalRisk * TARGET_PERCENT);
 
-  // get_period_label — the LATEST 2026 date found in either date column names
-  // the reporting period. March maps to "Q1 '26"; every other month is written
-  // out. The clock is not consulted.
+  // get_period_label — the reporting period is the LAST month in the file that
+  // carries real volume, and March maps to "Q1 '26". The clock is never
+  // consulted, so the same workbook always produces the same label.
   //
-  // Note this is max(), not "the last month carrying real volume": a single row
-  // dated 2026-12-14 IS the latest date and so names the period "Dec '26", even
-  // if every other row is May. That is the script's behaviour and it is what
-  // this port reproduces; the month tally is reported in the run summary so a
-  // surprising label can at least be traced to the row that caused it.
-  var monthTally = [], latestMonth = null;
+  // Deliberately not max(): the latest single date let one row dated 2026-12-14
+  // (a scheduled closure, a mistyped year) name a "Dec '26" period on a file
+  // whose data is May. A month holding at least PERIOD_MIN_SHARE of the year's
+  // dated rows is a reporting month; anything after it is noise, and it is
+  // named in the run summary rather than dropped quietly. The Python does the
+  // same — keep the two in step if either changes.
+  var monthTally = [], skippedMonths = [], chosenMonth = null, periodFloor = 0;
 
   function getPeriodLabel() {
-    var byMonth = {}, latest = null;
+    var byMonth = {}, total = 0;
     [dateCreatedCol, dateClosedCol].forEach(function (col) {
-      var colLatest = null;
       rows.forEach(function (r) {
         var d = E.excelDateInfo(r[col]);
         if (!d || d.year !== YEAR) return;
         byMonth[d.month] = (byMonth[d.month] || 0) + 1;
-        var key = d.month * 1e6 + d.day * 1e4 + (d.hour || 0) * 100 + (d.minute || 0);
-        if (colLatest === null || key > colLatest) colLatest = key;
+        total++;
       });
-      // dates.append(s.max()) per column, then max(dates) across them.
-      if (colLatest !== null && (latest === null || colLatest > latest)) latest = colLatest;
     });
-    if (latest === null) {
+    var months = Object.keys(byMonth).map(Number).sort(function (a, b) { return a - b; });
+    if (!months.length) {
       throw new Error('No valid ' + YEAR + ' dates found in Date created/Date closed columns.');
     }
-    var months = Object.keys(byMonth).map(Number).sort(function (a, b) { return a - b; });
+    periodFloor = Math.max(2, Math.ceil(total * PERIOD_MIN_SHARE));
+    var solid = months.filter(function (m) { return byMonth[m] >= periodFloor; });
+    var pool = solid.length ? solid : months;
+    chosenMonth = pool[pool.length - 1];
+
     monthTally = months.map(function (m) { return MONTH_ABBR[m - 1] + ' x' + byMonth[m]; });
-    latestMonth = Math.floor(latest / 1e6);
-    return latestMonth === 3 ? "Q1 '26" : (MONTH_ABBR[latestMonth - 1] + " '26");
+    skippedMonths = months.filter(function (m) { return m > chosenMonth; })
+      .map(function (m) { return MONTH_ABBR[m - 1] + ' x' + byMonth[m]; });
+
+    return chosenMonth === 3 ? "Q1 '26" : (MONTH_ABBR[chosenMonth - 1] + " '26");
   }
 
   var periodLabel = getPeriodLabel();
@@ -504,13 +512,13 @@ window.Reports.s4 = async function s4(wb) {
     'Created/updated: ' + OUTPUT_FILE,
     'Created/updated: ' + HISTORY_FILE,
     '',
-    // Everything below is browser-side context with no counterpart in the
-    // script — it explains the label rather than changing it. The month tally
-    // matters most: the period is the LATEST 2026 date, so a single stray row
-    // can name it, and this is the line that shows you that row exists.
-    'Reporting period: latest ' + YEAR + ' date in ' + dateCreatedCol + ' / ' + dateClosedCol +
-      ' falls in ' + MONTH_ABBR[latestMonth - 1],
-    'Dates by month in file: ' + monthTally.join(', '),
+    // Everything below is browser-side context — it explains the label rather
+    // than changing it. The tally matters most: it shows which month the period
+    // came from and, when a later month was ignored, that the rows exist.
+    'Reporting period: ' + MONTH_ABBR[chosenMonth - 1] + ' — the last month in ' +
+      dateCreatedCol + ' / ' + dateClosedCol + ' holding at least ' + periodFloor + ' rows',
+    'Dates by month in file: ' + monthTally.join(', ') +
+      (skippedMonths.length ? '   — ignored as noise: ' + skippedMonths.join(', ') : ''),
     'Target arithmetic: ' + Math.round(TARGET_PERCENT * 100) + '% of Total Risk (' + openRisk +
       ' open + ' + closedRisk + ' closed = ' + totalRisk + ') = ' + targetValue,
     'History loaded from: ' + historySource,

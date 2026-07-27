@@ -1,3 +1,4 @@
+import math
 import os
 import re
 import sys
@@ -32,6 +33,16 @@ BASELINE_TOTAL_RISK = 578
 TARGET_LABEL = "Target '26"
 TARGET_PERCENT = 0.80
 
+# A month must hold at least this share of the year's dated rows before it can
+# name the reporting period. A real reporting month carries roughly 1/N of the
+# file; one or two future-dated rows must not name the report. Raise it if stray
+# months still slip through, lower it if a genuine (very partial) month is being
+# skipped -- the run always prints the full month tally either way.
+PERIOD_MIN_SHARE = 0.05
+
+MONTH_ABBR = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
 # If History.xlsx does not exist, these starting values make the first output
 # look like your sample image. Set this to False if you want History.xlsx empty.
 SEED_HISTORY_WHEN_MISSING = True
@@ -64,24 +75,42 @@ def find_required_column(df, wanted_name):
 
 def get_period_label(df, date_created_col, date_closed_col):
     """
-    Detect reporting month from the latest 2026 date available.
-    This matches your sample where May'26 is calculated from the Jun sample file.
+    Detect the reporting month from the dates in the file.
+
+    The period is the LAST month that carries real volume -- not simply the
+    latest date. max() let a single row dated 2026-12-14 (a scheduled closure
+    date, a mistyped year) name the report "Dec '26" on a file whose data is
+    May, which is what this floor exists to prevent. A month holding at least
+    PERIOD_MIN_SHARE of the year's dated rows is a reporting month; anything
+    after it is noise. The clock is never consulted, so the same file always
+    produces the same label.
     """
-    dates = []
+    by_month = {}
+    total = 0
     for col in [date_created_col, date_closed_col]:
         if col in df.columns:
             s = pd.to_datetime(df[col], errors="coerce")
             s = s[s.dt.year == YEAR]
-            if not s.empty:
-                dates.append(s.max())
-    if not dates:
+            for m in s.dt.month:
+                by_month[m] = by_month.get(m, 0) + 1
+                total += 1
+    if not by_month:
         raise ValueError(f"No valid {YEAR} dates found in Date created/Date closed columns.")
 
-    latest_date = max(dates)
-    month_abbr = latest_date.strftime("%b")
-    if month_abbr == "Mar":
+    months = sorted(by_month)
+    floor = max(2, math.ceil(total * PERIOD_MIN_SHARE))
+    solid = [m for m in months if by_month[m] >= floor]
+    chosen = (solid or months)[-1]
+    skipped = [f"{MONTH_ABBR[m - 1]} x{by_month[m]}" for m in months if m > chosen]
+
+    tally = ", ".join(f"{MONTH_ABBR[m - 1]} x{by_month[m]}" for m in months)
+    print(f"Dates by month in file: {tally}")
+    if skipped:
+        print(f"Ignored as noise (under {floor} rows): {', '.join(skipped)}")
+
+    if chosen == 3:
         return "Q1 '26"
-    return f"{month_abbr} '26"
+    return f"{MONTH_ABBR[chosen - 1]} '26"
 
 
 def calculate_metrics(input_file):
