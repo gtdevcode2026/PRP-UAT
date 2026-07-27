@@ -21,20 +21,39 @@ window.Reports.d2 = async function d2(wb) {
     sheet.headers.forEach(function (h, i) { out[rawHeaders[i]] = row[h]; });
     return out;
   });
-  ['ID', 'Organization', 'Stage', 'Date created', 'Tags'].forEach(function (c) {
-    if (rawHeaders.indexOf(c) === -1) throw new Error('Missing required columns: ' + c);
+  // Report every missing column at once — naming them one run at a time turns
+  // a single malformed export into five round trips.
+  var missing = ['ID', 'Organization', 'Stage', 'Date created', 'Tags'].filter(function (c) {
+    return rawHeaders.indexOf(c) === -1;
   });
+  if (missing.length) throw new Error('Missing required columns: ' + missing.join(', '));
 
+  // Exports carry invisible characters that survive a plain trim: zero-width
+  // spaces/joiners, BOM, and non-breaking spaces between words. They make a
+  // cell that reads as "Cyber" fail an equality test against "cyber" for no
+  // visible reason, so strip them before anything compares these values.
+  function clean(v) {
+    if (E.isBlank(v)) return '';
+    return String(v)
+      .replace(/[​-‍﻿]/g, '')
+      .replace(/[   ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
   rows.forEach(function (r) {
-    ['Organization', 'Stage', 'Tags'].forEach(function (c) {
-      r[c] = E.isBlank(r[c]) ? '' : String(r[c]).trim();
-    });
+    ['Organization', 'Stage', 'Tags'].forEach(function (c) { r[c] = clean(r[c]); });
   });
 
+  // Step 7: Tags equals "Cyber" (case-insensitive) AND Date created in 2026.
+  // Counted per-predicate as well as combined, because when the result is zero
+  // the only useful question is WHICH half rejected everything.
+  var tagOnly = 0, yearOnly = 0;
   var filtered = rows.filter(function (r) {
     var tagMatch = /^cyber$/i.test(r.Tags);
-    var year = E.excelYear(r['Date created']);
-    return tagMatch && year === 2026;
+    var yearMatch = E.excelYear(r['Date created']) === 2026;
+    if (tagMatch) tagOnly++;
+    if (yearMatch) yearOnly++;
+    return tagMatch && yearMatch;
   });
 
   var CLOSED_STAGES = { 'Completed': 1, 'Under review': 1 };
@@ -130,6 +149,52 @@ window.Reports.d2 = async function d2(wb) {
   var noteRow = kpiStartRow + KPI.length + 2;
   setCell(grid, noteRow, 1, 'Q2 formula');
   setCell(grid, noteRow, 2, 'Closed / Grand Total = ' + closedTotal + ' / ' + recordTotal);
+
+  // ── Diagnostics ──
+  // Q2 is a ratio over the filtered set, so when the filter matches nothing it
+  // reports a confident "0%" that is indistinguishable from a real measurement.
+  // These four rows make the difference visible: they say how many rows each
+  // half of the Step 7 filter accepted, and — decisively — what the rejected
+  // values actually look like, so one client run identifies the cause instead
+  // of requiring another round trip.
+  //
+  // Written across all four columns on purpose. ReportEngine.trimSparseCols
+  // drops any column filled in fewer than half the surviving rows, and column D
+  // ("Grand Total") sits close to that line; a block of 2-cell rows would push
+  // it under and silently delete a column from the in-app preview table.
+  function distinct(values, limit) {
+    var seen = [], counts = {};
+    values.forEach(function (v) {
+      var k = v === '' ? '(blank)' : String(v);
+      if (!counts[k]) { counts[k] = 0; seen.push(k); }
+      counts[k]++;
+    });
+    seen.sort(function (a, b) { return counts[b] - counts[a]; });
+    var shown = seen.slice(0, limit).map(function (k) { return k + ' ×' + counts[k]; });
+    if (seen.length > limit) shown.push('+' + (seen.length - limit) + ' more');
+    return shown.join('  ·  ') || '(none)';
+  }
+
+  var unparsedDates = 0;
+  var yearsSeen = rows.map(function (r) {
+    var y = E.excelYear(r['Date created']);
+    if (y === null) { unparsedDates++; return 'unreadable'; }
+    return String(y);
+  });
+
+  var diagRow = noteRow + 2;
+  ['Diagnostics', 'Rows read', 'Tags = Cyber', 'Created in 2026'].forEach(function (h, i) {
+    setCell(grid, diagRow, i + 1, h);
+  });
+  setCell(grid, diagRow + 1, 1, 'Rows matching');
+  setCell(grid, diagRow + 1, 2, rows.length);
+  setCell(grid, diagRow + 1, 3, tagOnly);
+  setCell(grid, diagRow + 1, 4, yearOnly);
+  setCell(grid, diagRow + 2, 1, 'Tags seen');
+  setCell(grid, diagRow + 2, 2, distinct(rows.map(function (r) { return r.Tags; }), 6));
+  setCell(grid, diagRow + 3, 1, 'Date created seen');
+  setCell(grid, diagRow + 3, 2, distinct(yearsSeen, 6) +
+    (unparsedDates ? '  — ' + unparsedDates + ' cell(s) could not be read as a date' : ''));
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
 
@@ -236,11 +301,22 @@ window.Reports.d2 = async function d2(wb) {
   });
   style(noteRow, 1, { bold: true });
 
+  // Diagnostics block: same header treatment as the tables above it.
+  for (var dc = 1; dc <= 4; dc++) {
+    style(diagRow, dc, { fill: HEADER_FILL, bold: true, border: true, center: dc > 1 });
+    style(diagRow + 1, dc, { border: true, center: dc > 1 });
+  }
+  style(diagRow + 2, 1, { bold: true });
+  style(diagRow + 3, 1, { bold: true });
+
   // Column widths (A-M), uniform row heights, and freeze_panes = "A5" — which
   // is a 4-row vertical split, so the pivot header stays put while scrolling.
   var WIDTHS = [18, 12, 12, 14, 4, 14, 14, 14, 14, 14, 14, 14, 14];
   WIDTHS.forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
-  for (var rh = 1; rh <= 49; rh++) ws.getRow(rh).height = 22;
+  // Cover the whole sheet plus the chart anchors below it. Derived rather than
+  // hardcoded: the grid grows with the number of zones in the client's data.
+  var lastStyledRow = Math.max(49, grid.length);
+  for (var rh = 1; rh <= lastStyledRow; rh++) ws.getRow(rh).height = 22;
   ws.views = [{ state: 'frozen', xSplit: 0, ySplit: startRow }];
 
   // Native, editable charts (data-linked to hidden helper blocks) replace the

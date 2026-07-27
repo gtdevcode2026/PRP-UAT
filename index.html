@@ -516,6 +516,20 @@ body > * { position: relative; z-index: var(--z-base); }
   border: 1px solid var(--hairline-2); cursor: not-allowed;
 }
 .run-hint { font-size: var(--fs-sm); color: var(--tx-mute); text-align: center; padding: 4px 0; }
+.history-note {
+  display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+  font-size: var(--fs-sm); color: var(--tx-mute); text-align: center; padding: 2px 0;
+}
+.history-note[hidden] { display: none; }
+.history-note strong { color: var(--tx-hi); font-variant-numeric: tabular-nums; }
+.history-reset {
+  appearance: none; margin: 0; cursor: pointer;
+  background: none; border: none; padding: 4px 2px;
+  font-size: var(--fs-sm); font-weight: 700; color: var(--gold);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.history-reset:hover { color: var(--gold-hi); }
+.history-reset:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
 
 /* ── RUN OUTPUTS ── */
 .run-outputs { display: none; }
@@ -826,6 +840,9 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
         <div class="pipe-head"><span class="pipe-label">Generate</span></div>
         <button id="run-btn" class="run-btn" disabled>Run report</button>
         <div class="run-hint" id="run-hint" role="status" aria-live="polite">Loading the report engine…</div>
+        <!-- Risk Dashboard keeps its history between runs; surface that state
+             rather than letting the numbers change for no visible reason. -->
+        <div class="history-note" id="history-note" hidden></div>
         <div class="run-outputs" id="run-outputs"></div>
       </div>
     </section>
@@ -895,14 +912,55 @@ window.ReportEngine = (function () {
     if (v instanceof Date) {
       return { year: v.getUTCFullYear(), month: v.getUTCMonth() + 1, day: v.getUTCDate(), hour: v.getUTCHours(), minute: v.getUTCMinutes(), second: v.getUTCSeconds() };
     }
+    // Text dates. pandas' to_datetime accepts far more shapes than `new Date()`
+    // does, and a report that silently drops every row it cannot parse reports a
+    // confident wrong number rather than an error — a "Date created" column
+    // exported as 14/12/2026 made every 2026 filter in this app match nothing.
+    // Each shape is decomposed with a regex and never round-tripped through a
+    // local-time Date, for the same reason the numeric branch decodes by hand.
     var s = String(v).trim();
-    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return { year: +m[1], month: +m[2], day: +m[3], hour: 0, minute: 0, second: 0 };
+    if (!s) return null;
+    var m;
+    // Year first: 2026-12-14, 2026/12/14, 2026-12-14T09:30:00.
+    m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+    if (m) return ymdInfo(+m[1], +m[2], +m[3], s);
+    // Day/month numeric: 14/12/2026, 12/14/2026, 14-12-2026, 14.12.2026.
+    // pandas defaults to dayfirst=False, so a leading value that COULD be a
+    // month is read as one; a leading value above 12 can only be the day.
+    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+    if (m) {
+      var a = +m[1], b = +m[2], y = +m[3];
+      return a <= 12 ? ymdInfo(y, a, b, s) : ymdInfo(y, b, a, s);
+    }
+    // Named month: 14-Dec-2026, 14 Dec 2026, 14 December 2026.
+    m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,})[-\s,]+(\d{4})/);
+    if (m) { var mo = MONTH_NUM[m[2].slice(0, 3).toLowerCase()]; if (mo) return ymdInfo(+m[3], mo, +m[1], s); }
+    // Month first: Dec 14, 2026 / December 14 2026.
+    m = s.match(/^([A-Za-z]{3,})[-\s](\d{1,2})[-\s,]+(\d{4})/);
+    if (m) { var mo2 = MONTH_NUM[m[1].slice(0, 3).toLowerCase()]; if (mo2) return ymdInfo(+m[3], mo2, +m[2], s); }
+    // Anything exotic: let the engine try. Every string still reaching here was
+    // parsed as LOCAL time — only date-only ISO strings are treated as UTC, and
+    // those are handled above — so read the local components. The previous code
+    // read the UTC ones, which shifted every text date back a day anywhere east
+    // of Greenwich (12/14/2026 came out as the 13th, and 01/01/2026 came out in
+    // 2025 and was dropped by a year filter).
     var parsed = new Date(s);
     if (!isNaN(parsed.getTime())) {
-      return { year: parsed.getUTCFullYear(), month: parsed.getUTCMonth() + 1, day: parsed.getUTCDate(), hour: parsed.getUTCHours(), minute: parsed.getUTCMinutes(), second: parsed.getUTCSeconds() };
+      return { year: parsed.getFullYear(), month: parsed.getMonth() + 1, day: parsed.getDate(), hour: parsed.getHours(), minute: parsed.getMinutes(), second: parsed.getSeconds() };
     }
     return null;
+  }
+  var MONTH_NUM = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  // Builds the calendar-component object shared by every text-date branch,
+  // rejecting impossible month/day combinations (25/13/2026) rather than
+  // letting them roll over into the next month the way Date would.
+  function ymdInfo(year, month, day, src) {
+    if (!(month >= 1 && month <= 12) || !(day >= 1 && day <= 31)) return null;
+    var t = String(src).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    return {
+      year: year, month: month, day: day,
+      hour: t ? +t[1] : 0, minute: t ? +t[2] : 0, second: t && t[3] ? +t[3] : 0,
+    };
   }
   function excelYear(v) { var info = excelDateInfo(v); return info ? info.year : null; }
   function isNumericColumn(rows, colIdx) {
@@ -1021,12 +1079,18 @@ window.ReportEngine = (function () {
     var metricCol = headerRow.indexOf('Metric'), valueCol = headerRow.indexOf('Value');
     if (metricCol === -1 || valueCol === -1) return null;
     var labels = [], values = [];
+    // Read only the contiguous KPI table, stopping at the blank row that ends
+    // it. This used to scan to the bottom of the sheet, so any later block with
+    // a label and a number became an extra bar — a "Rows matching 36" row below
+    // the table charted as 3600%. The KPI chart is a fixed four-metric panel;
+    // it has no business reading rows the table does not own.
     for (var r = kpiRowIdx + 1; r < grid.length; r++) {
       var row = grid[r] || [];
       var metric = row[metricCol];
-      if (isBlank(metric) || String(metric).trim() === '') continue;
+      if (isBlank(metric) || String(metric).trim() === '') break;
       var val = row[valueCol];
-      var num = typeof val === 'number' ? val : parseFloat(val);
+      // Genuine numeric cells only: parseFloat('2026 x36') would yield 2026.
+      var num = typeof val === 'number' ? val : NaN;
       if (isBlank(val) || Number.isNaN(num)) continue;
       if (/formula/i.test(String(metric))) continue;
       labels.push(String(metric)); values.push(num);
@@ -2049,20 +2113,39 @@ window.Reports.d2 = async function d2(wb) {
     sheet.headers.forEach(function (h, i) { out[rawHeaders[i]] = row[h]; });
     return out;
   });
-  ['ID', 'Organization', 'Stage', 'Date created', 'Tags'].forEach(function (c) {
-    if (rawHeaders.indexOf(c) === -1) throw new Error('Missing required columns: ' + c);
+  // Report every missing column at once — naming them one run at a time turns
+  // a single malformed export into five round trips.
+  var missing = ['ID', 'Organization', 'Stage', 'Date created', 'Tags'].filter(function (c) {
+    return rawHeaders.indexOf(c) === -1;
   });
+  if (missing.length) throw new Error('Missing required columns: ' + missing.join(', '));
 
+  // Exports carry invisible characters that survive a plain trim: zero-width
+  // spaces/joiners, BOM, and non-breaking spaces between words. They make a
+  // cell that reads as "Cyber" fail an equality test against "cyber" for no
+  // visible reason, so strip them before anything compares these values.
+  function clean(v) {
+    if (E.isBlank(v)) return '';
+    return String(v)
+      .replace(/[​-‍﻿]/g, '')
+      .replace(/[   ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
   rows.forEach(function (r) {
-    ['Organization', 'Stage', 'Tags'].forEach(function (c) {
-      r[c] = E.isBlank(r[c]) ? '' : String(r[c]).trim();
-    });
+    ['Organization', 'Stage', 'Tags'].forEach(function (c) { r[c] = clean(r[c]); });
   });
 
+  // Step 7: Tags equals "Cyber" (case-insensitive) AND Date created in 2026.
+  // Counted per-predicate as well as combined, because when the result is zero
+  // the only useful question is WHICH half rejected everything.
+  var tagOnly = 0, yearOnly = 0;
   var filtered = rows.filter(function (r) {
     var tagMatch = /^cyber$/i.test(r.Tags);
-    var year = E.excelYear(r['Date created']);
-    return tagMatch && year === 2026;
+    var yearMatch = E.excelYear(r['Date created']) === 2026;
+    if (tagMatch) tagOnly++;
+    if (yearMatch) yearOnly++;
+    return tagMatch && yearMatch;
   });
 
   var CLOSED_STAGES = { 'Completed': 1, 'Under review': 1 };
@@ -2158,6 +2241,52 @@ window.Reports.d2 = async function d2(wb) {
   var noteRow = kpiStartRow + KPI.length + 2;
   setCell(grid, noteRow, 1, 'Q2 formula');
   setCell(grid, noteRow, 2, 'Closed / Grand Total = ' + closedTotal + ' / ' + recordTotal);
+
+  // ── Diagnostics ──
+  // Q2 is a ratio over the filtered set, so when the filter matches nothing it
+  // reports a confident "0%" that is indistinguishable from a real measurement.
+  // These four rows make the difference visible: they say how many rows each
+  // half of the Step 7 filter accepted, and — decisively — what the rejected
+  // values actually look like, so one client run identifies the cause instead
+  // of requiring another round trip.
+  //
+  // Written across all four columns on purpose. ReportEngine.trimSparseCols
+  // drops any column filled in fewer than half the surviving rows, and column D
+  // ("Grand Total") sits close to that line; a block of 2-cell rows would push
+  // it under and silently delete a column from the in-app preview table.
+  function distinct(values, limit) {
+    var seen = [], counts = {};
+    values.forEach(function (v) {
+      var k = v === '' ? '(blank)' : String(v);
+      if (!counts[k]) { counts[k] = 0; seen.push(k); }
+      counts[k]++;
+    });
+    seen.sort(function (a, b) { return counts[b] - counts[a]; });
+    var shown = seen.slice(0, limit).map(function (k) { return k + ' ×' + counts[k]; });
+    if (seen.length > limit) shown.push('+' + (seen.length - limit) + ' more');
+    return shown.join('  ·  ') || '(none)';
+  }
+
+  var unparsedDates = 0;
+  var yearsSeen = rows.map(function (r) {
+    var y = E.excelYear(r['Date created']);
+    if (y === null) { unparsedDates++; return 'unreadable'; }
+    return String(y);
+  });
+
+  var diagRow = noteRow + 2;
+  ['Diagnostics', 'Rows read', 'Tags = Cyber', 'Created in 2026'].forEach(function (h, i) {
+    setCell(grid, diagRow, i + 1, h);
+  });
+  setCell(grid, diagRow + 1, 1, 'Rows matching');
+  setCell(grid, diagRow + 1, 2, rows.length);
+  setCell(grid, diagRow + 1, 3, tagOnly);
+  setCell(grid, diagRow + 1, 4, yearOnly);
+  setCell(grid, diagRow + 2, 1, 'Tags seen');
+  setCell(grid, diagRow + 2, 2, distinct(rows.map(function (r) { return r.Tags; }), 6));
+  setCell(grid, diagRow + 3, 1, 'Date created seen');
+  setCell(grid, diagRow + 3, 2, distinct(yearsSeen, 6) +
+    (unparsedDates ? '  — ' + unparsedDates + ' cell(s) could not be read as a date' : ''));
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
 
@@ -2264,11 +2393,22 @@ window.Reports.d2 = async function d2(wb) {
   });
   style(noteRow, 1, { bold: true });
 
+  // Diagnostics block: same header treatment as the tables above it.
+  for (var dc = 1; dc <= 4; dc++) {
+    style(diagRow, dc, { fill: HEADER_FILL, bold: true, border: true, center: dc > 1 });
+    style(diagRow + 1, dc, { border: true, center: dc > 1 });
+  }
+  style(diagRow + 2, 1, { bold: true });
+  style(diagRow + 3, 1, { bold: true });
+
   // Column widths (A-M), uniform row heights, and freeze_panes = "A5" — which
   // is a 4-row vertical split, so the pivot header stays put while scrolling.
   var WIDTHS = [18, 12, 12, 14, 4, 14, 14, 14, 14, 14, 14, 14, 14];
   WIDTHS.forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
-  for (var rh = 1; rh <= 49; rh++) ws.getRow(rh).height = 22;
+  // Cover the whole sheet plus the chart anchors below it. Derived rather than
+  // hardcoded: the grid grows with the number of zones in the client's data.
+  var lastStyledRow = Math.max(49, grid.length);
+  for (var rh = 1; rh <= lastStyledRow; rh++) ws.getRow(rh).height = 22;
   ws.views = [{ state: 'frozen', xSplit: 0, ySplit: startRow }];
 
   // Native, editable charts (data-linked to hidden helper blocks) replace the
@@ -3185,10 +3325,57 @@ window.Reports.s3d = async function s3d(wb) {
 };
 
 // ── Inlined: reports/s4.js ───────────────────────────────────────────────
+window.S4History = (function () {
+  'use strict';
+  var KEY = 'prp.s4.history.v1';   // versioned: a schema change bumps the key
+
+  function store() {
+    try {
+      var s = window.localStorage;
+      if (!s) return null;
+      // Private mode can expose localStorage but throw on write, so probe it.
+      var probe = KEY + '.probe';
+      s.setItem(probe, '1');
+      s.removeItem(probe);
+      return s;
+    } catch (e) { return null; }
+  }
+  function load() {
+    var s = store();
+    if (!s) return null;
+    try {
+      var raw = s.getItem(KEY);
+      if (!raw) return null;
+      var rows = JSON.parse(raw);
+      var valid = Array.isArray(rows) && rows.length && rows.every(function (r) {
+        return r && typeof r === 'object' && r.Month;
+      });
+      return valid ? rows : null;   // corrupt payload falls back to the seed
+    } catch (e) { return null; }
+  }
+  function save(rows) {
+    var s = store();
+    if (!s) return false;
+    try { s.setItem(KEY, JSON.stringify(rows)); return true; } catch (e) { return false; }
+  }
+  function clear() {
+    var s = store();
+    if (!s) return false;
+    try { s.removeItem(KEY); return true; } catch (e) { return false; }
+  }
+  function count() { var r = load(); return r ? r.length : 0; }
+  return { KEY: KEY, load: load, save: save, clear: clear, count: count, available: function () { return !!store(); } };
+})();
+
 window.Reports.s4 = async function s4(wb) {
   var E = window.ReportEngine;
   var B = window.ReportBridge;
 
+  // ── Configuration (spec step 2: every business constant in one place) ──
+  var SHEET_NAME = 'OneTrust - Risk Export';
+  var OUTPUT_FILE = 'Risk_Output.xlsx';
+  var HISTORY_FILE = 'History.xlsx';
+  var DASH_SHEET = 'Dashboard', HIST_USED_SHEET = 'History Used', HIST_SHEET = 'Sheet1';
   var YEAR = 2026;
   var OPEN_STAGES = { 'Evaluation': 1, 'Identified': 1, 'Treatment': 1 };
   var CLOSED_STAGE = 'Monitoring';
@@ -3196,14 +3383,33 @@ window.Reports.s4 = async function s4(wb) {
   var BASELINE_OPEN_RISK = 536, BASELINE_CLOSED_RISK = 42, BASELINE_TOTAL_RISK = 578;
   var TARGET_LABEL = "Target '26";
   var TARGET_PERCENT = 0.80;
+  var SEED_HISTORY_WHEN_MISSING = true;
   var SEED_ROWS = [
     { Month: "Q1 '26", 'Open risk as on date': 655, 'Closed Risk in 2026': 41, 'Total Risk': 696, 'Risk Created in 2026': 118 },
     { Month: "Apr '26", 'Open risk as on date': 694, 'Closed Risk in 2026': 42, 'Total Risk': 736, 'Risk Created in 2026': 158 },
   ];
   var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  var sheet = E.readSheet(wb, 'OneTrust - Risk Export');
-  var cleanedHeaders = sheet.headers.map(function (h) { return String(h).replace(/\r/g, '').replace(/\n/g, '').trim(); });
+  // Strips what a plain trim leaves behind. Exports carry zero-width spaces,
+  // BOM and non-breaking spaces; Stage is matched by exact lookup against
+  // OPEN_STAGES, so one invisible character silently drops a risk from the
+  // count with nothing on screen to explain the discrepancy.
+  function clean(v) {
+    if (E.isBlank(v)) return '';
+    return String(v)
+      .replace(/[​-‍﻿]/g, '')
+      .replace(/[   ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Name the sheet AND what the workbook actually contains — "not found" on its
+  // own gives the user nothing to act on (automation.py:100 lists them too).
+  if (wb && Array.isArray(wb.SheetNames) && wb.SheetNames.indexOf(SHEET_NAME) === -1) {
+    throw new Error("Sheet '" + SHEET_NAME + "' not found. Available sheets: " + wb.SheetNames.join(', '));
+  }
+  var sheet = E.readSheet(wb, SHEET_NAME);
+  var cleanedHeaders = sheet.headers.map(clean);
   var rows = sheet.rows.map(function (row) {
     var out = {};
     sheet.headers.forEach(function (h, i) { out[cleanedHeaders[i]] = row[h]; });
@@ -3222,9 +3428,7 @@ window.Reports.s4 = async function s4(wb) {
   var dateCreatedCol = findOptionalColumn('Date created');
   var dateClosedCol = findOptionalColumn('Date closed');
 
-  rows.forEach(function (r) {
-    r[stageCol] = E.isBlank(r[stageCol]) ? '' : String(r[stageCol]).replace(/\r/g, '').replace(/\n/g, '').trim();
-  });
+  rows.forEach(function (r) { r[stageCol] = clean(r[stageCol]); });
 
   var openRisk = rows.filter(function (r) { return OPEN_STAGES.hasOwnProperty(r[stageCol]); }).length;
   var closedRisk;
@@ -3305,21 +3509,45 @@ window.Reports.s4 = async function s4(wb) {
     'Processed On': processedOn,
   };
 
-  // load_or_create_history: no persistence across runs (Decision 4) — always
-  // seed fresh, matching the current app's actual (not intended) behavior.
   var HIST_COLS = ['Month', 'Open risk as on date', 'Closed Risk in 2026', 'Total Risk', 'Risk Created in 2026', 'Target 80%', 'Closed %', 'Input File', 'Processed On'];
-  var history = SEED_ROWS.map(function (r) {
-    var row = Object.assign({}, r);
-    row['Target 80%'] = Math.round(row['Total Risk'] * TARGET_PERCENT);
-    row['Closed %'] = row['Closed Risk in 2026'] / row['Total Risk'];
-    row['Input File'] = 'Seed from sample image';
-    row['Processed On'] = processedOn;
-    return row;
-  });
 
-  // update_history: append only if this month isn't already present.
+  // load_or_create_history (step 15): prefer the table carried over from the
+  // previous run; otherwise create one, seeded when configured to be.
+  var storageOk = !!(window.S4History && window.S4History.available());
+  var stored = window.S4History ? window.S4History.load() : null;
+  var history, historySource;
+  if (stored) {
+    // Normalise: a stored row must expose every history column, since older
+    // payloads may predate a column being added.
+    history = stored.map(function (r) {
+      var row = {};
+      HIST_COLS.forEach(function (c) { row[c] = r[c] === undefined ? '' : r[c]; });
+      return row;
+    });
+    historySource = 'browser storage';
+  } else if (SEED_HISTORY_WHEN_MISSING) {
+    history = SEED_ROWS.map(function (r) {
+      var row = Object.assign({}, r);
+      row['Target 80%'] = Math.round(row['Total Risk'] * TARGET_PERCENT);
+      row['Closed %'] = row['Closed Risk in 2026'] / row['Total Risk'];
+      row['Input File'] = 'Seed from sample image';
+      row['Processed On'] = processedOn;
+      return row;
+    });
+    historySource = 'seed rows';
+  } else {
+    history = [];
+    historySource = 'empty';
+  }
+
+  // update_history (step 16): append only if this month isn't already present.
+  // Never overwrite — a re-run of the same month keeps the original figures.
   var alreadyPresent = history.some(function (r) { return String(r.Month) === String(metrics.Month); });
-  if (!alreadyPresent) history = history.concat([metrics]);
+  var historyUpdated = !alreadyPresent;
+  if (historyUpdated) history = history.concat([metrics]);
+
+  // save_history (step 20): this is what makes the next run cumulative.
+  var historySaved = window.S4History ? window.S4History.save(history) : false;
 
   // build_dashboard_frames
   function periodSortKey(label) {
@@ -3450,7 +3678,7 @@ window.Reports.s4 = async function s4(wb) {
   var progressChartPng = await B.renderStyledPng(progressTraces, progressLayout, 720, 430);
 
   var workbook = new ExcelJS.Workbook();
-  var wsDash = workbook.addWorksheet('Dashboard');
+  var wsDash = workbook.addWorksheet(DASH_SHEET);
   g.forEach(function (r) { wsDash.addRow(r); });
   // grid is 0-indexed, ExcelJS is 1-indexed.
   pctCells.forEach(function (rc) { wsDash.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
@@ -3517,7 +3745,7 @@ window.Reports.s4 = async function s4(wb) {
       return (i === 0 || i === calcLabels.length - 1) ? { idx: i, color: 'BFBFBF' } : null;
     }).filter(Boolean);
     s4Placements.push({
-      sheetName: 'Dashboard', anchor: { fromCol: 6, fromRow: 1, toCol: 15, toRow: 20 }, // ~"G2"
+      sheetName: DASH_SHEET, anchor: { fromCol: 6, fromRow: 1, toCol: 15, toRow: 20 }, // ~"G2"
       def: {
         grouping: 'clustered', legend: false, title: 'Cumulative Risk Treatment Progress',
         chartBg: '000000', plotBg: '000000', axisColor: 'FFFFFF',
@@ -3525,16 +3753,16 @@ window.Reports.s4 = async function s4(wb) {
         // set_x_axis({label_position: "low"}) — the bars carry their own labels.
         hideValAx: true, catTickLblPos: 'low',
         dataLabels: { position: 'ctr', color: 'FFFFFF' },
-        categories: { ref: R('Dashboard', 1, s4First, s4Last), cache: calcLabels },
+        categories: { ref: R(DASH_SHEET, 1, s4First, s4Last), cache: calcLabels },
         series: [
           { name: { lit: 'Progress' },
-            values: { ref: R('Dashboard', 2, s4First, s4Last), cache: calcValues }, color: 'FFC000', points: s4Points },
+            values: { ref: R(DASH_SHEET, 2, s4First, s4Last), cache: calcValues }, color: 'FFC000', points: s4Points },
         ],
       },
     });
   }
 
-  var wsHistUsed = workbook.addWorksheet('History Used');
+  var wsHistUsed = workbook.addWorksheet(HIST_USED_SHEET);
   historyGrid.forEach(function (r) { wsHistUsed.addRow(r); });
   wsHistUsed.columns.forEach(function (c) { c.width = 16; });
   histPctCells.forEach(function (rc) { wsHistUsed.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
@@ -3546,19 +3774,47 @@ window.Reports.s4 = async function s4(wb) {
   }
 
   var historyWorkbook = new ExcelJS.Workbook();
-  var wsHistOnly = historyWorkbook.addWorksheet('Sheet1');
+  var wsHistOnly = historyWorkbook.addWorksheet(HIST_SHEET);
   historyGrid.forEach(function (r) { wsHistOnly.addRow(r); });
   wsHistOnly.columns.forEach(function (c) { c.width = 16; });
   histPctCells.forEach(function (rc) { wsHistOnly.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
   var historyBuf = await historyWorkbook.xlsx.writeBuffer();
 
+  // ── Execution summary (step 29) ──
+  // The script's closing print() block (automation.py:353-362). There is no
+  // console here, so it is returned as stdout: buildPayload passes that
+  // straight through and the results view renders it in the "Script log"
+  // panel, which until now always read "No console output."
+  var storageNote = !storageOk
+    ? 'unavailable (private mode or file:// restrictions) — this run will not be remembered'
+    : historySaved
+      ? 'saved to browser storage · ' + history.length + ' period' + (history.length === 1 ? '' : 's') + ' held'
+      : 'could not be saved (storage full or blocked)';
+  var stdout = [
+    'Done.',
+    'Input file: ' + metrics['Input File'],
+    'Month calculated: ' + metrics.Month,
+    'Open risk as on date: ' + openRisk,
+    'Closed Risk in ' + YEAR + ': ' + closedRisk,
+    'Total Risk: ' + totalRisk,
+    'Target 80%: ' + targetValue,
+    'History updated with new month: ' + (historyUpdated ? 'Yes' : 'No - month already existed'),
+    'Created/updated: ' + OUTPUT_FILE,
+    'Created/updated: ' + HISTORY_FILE,
+    '',
+    'History loaded from: ' + historySource,
+    'History store: ' + storageNote,
+    'Periods in chart: ' + periodLabels.join(', ') + '  (latest 3 of ' + history.length + ')',
+  ].join('\n');
+
   return {
     ok: true,
+    stdout: stdout,
     files: [
-      { name: 'Risk_Output.xlsx', bytes: riskOutputBuf, sheets: [{ name: 'Dashboard', grid: gPreview }, { name: 'History Used', grid: historyGrid }] },
-      { name: 'History.xlsx', bytes: historyBuf, sheets: [{ name: 'Sheet1', grid: historyGrid }] },
+      { name: OUTPUT_FILE, bytes: riskOutputBuf, sheets: [{ name: DASH_SHEET, grid: gPreview }, { name: HIST_USED_SHEET, grid: historyGrid }] },
+      { name: HISTORY_FILE, bytes: historyBuf, sheets: [{ name: HIST_SHEET, grid: historyGrid }] },
     ],
-    chartImages: { 'Dashboard': progressChartPng },
+    chartImages: (function () { var m = {}; m[DASH_SHEET] = progressChartPng; return m; })(),
   };
 };
 
@@ -3761,6 +4017,25 @@ function updateRunBtn() {
   } else {
     hint.style.display = 'none';
   }
+  renderHistoryNote();
+}
+
+// The Risk Dashboard accumulates reporting periods across runs (spec steps
+// 15/16/20). That is stored state the workbook alone does not explain, so show
+// how many periods are held and offer a way back to a clean slate.
+function renderHistoryNote() {
+  const el = document.getElementById('history-note');
+  if (!el) return;
+  const isRiskDashboard = currentEntry().id === 's4';
+  const n = (isRiskDashboard && window.S4History) ? window.S4History.count() : 0;
+  if (!n) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = 'History: <strong>' + n + '</strong> period' + (n === 1 ? '' : 's') +
+                 ' carried over <button type="button" class="history-reset" id="history-reset">Reset</button>';
+  document.getElementById('history-reset').addEventListener('click', function () {
+    window.S4History.clear();
+    renderHistoryNote();
+  });
 }
 
 // ---------------------------------------------------------------------------

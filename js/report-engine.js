@@ -48,14 +48,68 @@ window.ReportEngine = (function () {
     if (v instanceof Date) {
       return { year: v.getUTCFullYear(), month: v.getUTCMonth() + 1, day: v.getUTCDate(), hour: v.getUTCHours(), minute: v.getUTCMinutes(), second: v.getUTCSeconds() };
     }
+    // Text dates. pandas' to_datetime accepts far more shapes than
+    // `new Date()` does, and a report that silently drops every row it cannot
+    // parse reports a confident wrong number rather than an error — a
+    // "Date created" column exported as 14/12/2026 made every 2026 filter in
+    // this app match nothing. Each shape below is decomposed with a regex and
+    // never round-tripped through a local-time Date, for the same reason the
+    // numeric branch above decodes the serial by hand.
     var s = String(v).trim();
-    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return { year: +m[1], month: +m[2], day: +m[3], hour: 0, minute: 0, second: 0 };
+    if (!s) return null;
+    var m;
+
+    // Year first: 2026-12-14, 2026/12/14, 2026.12.14, 2026-12-14T09:30:00.
+    m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+    if (m) return ymdInfo(+m[1], +m[2], +m[3], s);
+
+    // Day/month numeric: 14/12/2026, 12/14/2026, 14-12-2026, 14.12.2026.
+    // pandas defaults to dayfirst=False, so a leading value that COULD be a
+    // month is read as one; a leading value above 12 can only be the day.
+    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+    if (m) {
+      var a = +m[1], b = +m[2], y = +m[3];
+      return a <= 12 ? ymdInfo(y, a, b, s) : ymdInfo(y, b, a, s);
+    }
+
+    // Named month: 14-Dec-2026, 14 Dec 2026, 14 December 2026.
+    m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,})[-\s,]+(\d{4})/);
+    if (m) {
+      var mo = MONTH_NUM[m[2].slice(0, 3).toLowerCase()];
+      if (mo) return ymdInfo(+m[3], mo, +m[1], s);
+    }
+    // Month first: Dec 14, 2026 / December 14 2026.
+    m = s.match(/^([A-Za-z]{3,})[-\s](\d{1,2})[-\s,]+(\d{4})/);
+    if (m) {
+      var mo2 = MONTH_NUM[m[1].slice(0, 3).toLowerCase()];
+      if (mo2) return ymdInfo(+m[3], mo2, +m[2], s);
+    }
+
+    // Anything exotic: let the engine try. Every string still reaching here
+    // was parsed as LOCAL time — only date-only ISO strings are treated as
+    // UTC, and those are handled above — so read the local components. The
+    // previous code read the UTC ones, which shifted every text date back a
+    // day anywhere east of Greenwich (12/14/2026 came out as the 13th, and
+    // 01/01/2026 came out in 2025 and was dropped by a year filter).
     var parsed = new Date(s);
     if (!isNaN(parsed.getTime())) {
-      return { year: parsed.getUTCFullYear(), month: parsed.getUTCMonth() + 1, day: parsed.getUTCDate(), hour: parsed.getUTCHours(), minute: parsed.getUTCMinutes(), second: parsed.getUTCSeconds() };
+      return { year: parsed.getFullYear(), month: parsed.getMonth() + 1, day: parsed.getDate(), hour: parsed.getHours(), minute: parsed.getMinutes(), second: parsed.getSeconds() };
     }
     return null;
+  }
+
+  var MONTH_NUM = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+
+  // Builds the calendar-component object shared by every text-date branch,
+  // rejecting impossible month/day combinations (25/13/2026) rather than
+  // letting them roll over into the next month the way Date would.
+  function ymdInfo(year, month, day, src) {
+    if (!(month >= 1 && month <= 12) || !(day >= 1 && day <= 31)) return null;
+    var t = String(src).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    return {
+      year: year, month: month, day: day,
+      hour: t ? +t[1] : 0, minute: t ? +t[2] : 0, second: t && t[3] ? +t[3] : 0,
+    };
   }
 
   function excelYear(v) {
@@ -224,12 +278,18 @@ window.ReportEngine = (function () {
     var valueCol = headerRow.indexOf('Value');
     if (metricCol === -1 || valueCol === -1) return null;
     var labels = [], values = [];
+    // Read only the contiguous KPI table, stopping at the blank row that ends
+    // it. This used to scan to the bottom of the sheet, so any later block with
+    // a label and a number became an extra bar — a "Rows matching 36" row below
+    // the table charted as 3600%. The KPI chart is a fixed four-metric panel;
+    // it has no business reading rows the table does not own.
     for (var r = kpiRowIdx + 1; r < grid.length; r++) {
       var row = grid[r] || [];
       var metric = row[metricCol];
-      if (isBlank(metric) || String(metric).trim() === '') continue;
+      if (isBlank(metric) || String(metric).trim() === '') break;
       var val = row[valueCol];
-      var num = typeof val === 'number' ? val : parseFloat(val);
+      // Genuine numeric cells only: parseFloat('2026 x36') would yield 2026.
+      var num = typeof val === 'number' ? val : NaN;
       if (isBlank(val) || Number.isNaN(num)) continue;
       if (/formula/i.test(String(metric))) continue;
       labels.push(String(metric));

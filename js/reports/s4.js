@@ -1,19 +1,76 @@
 // Port of "diagram4/automation.py" (id: s4, "Risk Dashboard").
 // Reads "OneTrust - Risk Export", computes Open/Closed/Total risk counts
 // (Open = Evaluation+Identified+Treatment stages, Closed = Monitoring stage,
-// year-filtered on Date closed when present), derives a period label from
-// the max 2026 date found in Date created/Date closed — falling back to the
-// real current date when neither column exists, matching today's shipped
-// behavior exactly (confirmed with the user: no cross-run persistence, this
-// report resets to the 2 seed history rows and recomputes "now" every run,
-// exactly like the current Pyodide app, whose working directory is wiped
-// before every click). Builds a Baseline'25 -> last-3-periods -> Target'26
-// matrix and writes "Risk_Output.xlsx" (sheet "Dashboard" + "History Used")
-// and "History.xlsx".
+// year-filtered on Date closed when present), derives a period label from the
+// latest ELAPSED 2026 date in Date created/Date closed, builds a
+// Baseline'25 -> last-3-periods -> Target'26 matrix, and writes
+// "Risk_Output.xlsx" (sheets "Dashboard" + "History Used") and "History.xlsx".
+//
+// History now carries forward between runs — see window.S4History below.
+
+// ── History store ───────────────────────────────────────────────────────────
+// The script treats History.xlsx as "the historical data source for future
+// executions" (spec steps 15/16/20): it reads the file back on the next run so
+// periods accumulate. This app has no filesystem to read from — output files
+// are download blobs — so the browser's own storage stands in for the script's
+// working directory.
+//
+// Everything here is best-effort by design. Opened from file://, localStorage
+// can throw on access (opaque origin, private browsing, storage disabled by
+// policy). Every call is guarded, and when storage is unavailable the report
+// behaves exactly as it did before this existed — seed fresh every run — and
+// says so in its execution summary rather than pretending it saved anything.
+window.S4History = (function () {
+  'use strict';
+  var KEY = 'prp.s4.history.v1';   // versioned: a schema change bumps the key
+
+  function store() {
+    try {
+      var s = window.localStorage;
+      if (!s) return null;
+      // Private mode can expose localStorage but throw on write, so probe it.
+      var probe = KEY + '.probe';
+      s.setItem(probe, '1');
+      s.removeItem(probe);
+      return s;
+    } catch (e) { return null; }
+  }
+  function load() {
+    var s = store();
+    if (!s) return null;
+    try {
+      var raw = s.getItem(KEY);
+      if (!raw) return null;
+      var rows = JSON.parse(raw);
+      var valid = Array.isArray(rows) && rows.length && rows.every(function (r) {
+        return r && typeof r === 'object' && r.Month;
+      });
+      return valid ? rows : null;   // corrupt payload falls back to the seed
+    } catch (e) { return null; }
+  }
+  function save(rows) {
+    var s = store();
+    if (!s) return false;
+    try { s.setItem(KEY, JSON.stringify(rows)); return true; } catch (e) { return false; }
+  }
+  function clear() {
+    var s = store();
+    if (!s) return false;
+    try { s.removeItem(KEY); return true; } catch (e) { return false; }
+  }
+  function count() { var r = load(); return r ? r.length : 0; }
+  return { KEY: KEY, load: load, save: save, clear: clear, count: count, available: function () { return !!store(); } };
+})();
+
 window.Reports.s4 = async function s4(wb) {
   var E = window.ReportEngine;
   var B = window.ReportBridge;
 
+  // ── Configuration (spec step 2: every business constant in one place) ──
+  var SHEET_NAME = 'OneTrust - Risk Export';
+  var OUTPUT_FILE = 'Risk_Output.xlsx';
+  var HISTORY_FILE = 'History.xlsx';
+  var DASH_SHEET = 'Dashboard', HIST_USED_SHEET = 'History Used', HIST_SHEET = 'Sheet1';
   var YEAR = 2026;
   var OPEN_STAGES = { 'Evaluation': 1, 'Identified': 1, 'Treatment': 1 };
   var CLOSED_STAGE = 'Monitoring';
@@ -21,14 +78,33 @@ window.Reports.s4 = async function s4(wb) {
   var BASELINE_OPEN_RISK = 536, BASELINE_CLOSED_RISK = 42, BASELINE_TOTAL_RISK = 578;
   var TARGET_LABEL = "Target '26";
   var TARGET_PERCENT = 0.80;
+  var SEED_HISTORY_WHEN_MISSING = true;
   var SEED_ROWS = [
     { Month: "Q1 '26", 'Open risk as on date': 655, 'Closed Risk in 2026': 41, 'Total Risk': 696, 'Risk Created in 2026': 118 },
     { Month: "Apr '26", 'Open risk as on date': 694, 'Closed Risk in 2026': 42, 'Total Risk': 736, 'Risk Created in 2026': 158 },
   ];
   var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  var sheet = E.readSheet(wb, 'OneTrust - Risk Export');
-  var cleanedHeaders = sheet.headers.map(function (h) { return String(h).replace(/\r/g, '').replace(/\n/g, '').trim(); });
+  // Strips what a plain trim leaves behind. Exports carry zero-width spaces,
+  // BOM and non-breaking spaces; Stage is matched by exact lookup against
+  // OPEN_STAGES, so one invisible character silently drops a risk from the
+  // count with nothing on screen to explain the discrepancy.
+  function clean(v) {
+    if (E.isBlank(v)) return '';
+    return String(v)
+      .replace(/[​-‍﻿]/g, '')
+      .replace(/[   ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Name the sheet AND what the workbook actually contains — "not found" on its
+  // own gives the user nothing to act on (automation.py:100 lists them too).
+  if (wb && Array.isArray(wb.SheetNames) && wb.SheetNames.indexOf(SHEET_NAME) === -1) {
+    throw new Error("Sheet '" + SHEET_NAME + "' not found. Available sheets: " + wb.SheetNames.join(', '));
+  }
+  var sheet = E.readSheet(wb, SHEET_NAME);
+  var cleanedHeaders = sheet.headers.map(clean);
   var rows = sheet.rows.map(function (row) {
     var out = {};
     sheet.headers.forEach(function (h, i) { out[cleanedHeaders[i]] = row[h]; });
@@ -47,9 +123,7 @@ window.Reports.s4 = async function s4(wb) {
   var dateCreatedCol = findOptionalColumn('Date created');
   var dateClosedCol = findOptionalColumn('Date closed');
 
-  rows.forEach(function (r) {
-    r[stageCol] = E.isBlank(r[stageCol]) ? '' : String(r[stageCol]).replace(/\r/g, '').replace(/\n/g, '').trim();
-  });
+  rows.forEach(function (r) { r[stageCol] = clean(r[stageCol]); });
 
   var openRisk = rows.filter(function (r) { return OPEN_STAGES.hasOwnProperty(r[stageCol]); }).length;
   var closedRisk;
@@ -130,21 +204,45 @@ window.Reports.s4 = async function s4(wb) {
     'Processed On': processedOn,
   };
 
-  // load_or_create_history: no persistence across runs (Decision 4) — always
-  // seed fresh, matching the current app's actual (not intended) behavior.
   var HIST_COLS = ['Month', 'Open risk as on date', 'Closed Risk in 2026', 'Total Risk', 'Risk Created in 2026', 'Target 80%', 'Closed %', 'Input File', 'Processed On'];
-  var history = SEED_ROWS.map(function (r) {
-    var row = Object.assign({}, r);
-    row['Target 80%'] = Math.round(row['Total Risk'] * TARGET_PERCENT);
-    row['Closed %'] = row['Closed Risk in 2026'] / row['Total Risk'];
-    row['Input File'] = 'Seed from sample image';
-    row['Processed On'] = processedOn;
-    return row;
-  });
 
-  // update_history: append only if this month isn't already present.
+  // load_or_create_history (step 15): prefer the table carried over from the
+  // previous run; otherwise create one, seeded when configured to be.
+  var storageOk = !!(window.S4History && window.S4History.available());
+  var stored = window.S4History ? window.S4History.load() : null;
+  var history, historySource;
+  if (stored) {
+    // Normalise: a stored row must expose every history column, since older
+    // payloads may predate a column being added.
+    history = stored.map(function (r) {
+      var row = {};
+      HIST_COLS.forEach(function (c) { row[c] = r[c] === undefined ? '' : r[c]; });
+      return row;
+    });
+    historySource = 'browser storage';
+  } else if (SEED_HISTORY_WHEN_MISSING) {
+    history = SEED_ROWS.map(function (r) {
+      var row = Object.assign({}, r);
+      row['Target 80%'] = Math.round(row['Total Risk'] * TARGET_PERCENT);
+      row['Closed %'] = row['Closed Risk in 2026'] / row['Total Risk'];
+      row['Input File'] = 'Seed from sample image';
+      row['Processed On'] = processedOn;
+      return row;
+    });
+    historySource = 'seed rows';
+  } else {
+    history = [];
+    historySource = 'empty';
+  }
+
+  // update_history (step 16): append only if this month isn't already present.
+  // Never overwrite — a re-run of the same month keeps the original figures.
   var alreadyPresent = history.some(function (r) { return String(r.Month) === String(metrics.Month); });
-  if (!alreadyPresent) history = history.concat([metrics]);
+  var historyUpdated = !alreadyPresent;
+  if (historyUpdated) history = history.concat([metrics]);
+
+  // save_history (step 20): this is what makes the next run cumulative.
+  var historySaved = window.S4History ? window.S4History.save(history) : false;
 
   // build_dashboard_frames
   function periodSortKey(label) {
@@ -275,7 +373,7 @@ window.Reports.s4 = async function s4(wb) {
   var progressChartPng = await B.renderStyledPng(progressTraces, progressLayout, 720, 430);
 
   var workbook = new ExcelJS.Workbook();
-  var wsDash = workbook.addWorksheet('Dashboard');
+  var wsDash = workbook.addWorksheet(DASH_SHEET);
   g.forEach(function (r) { wsDash.addRow(r); });
   // grid is 0-indexed, ExcelJS is 1-indexed.
   pctCells.forEach(function (rc) { wsDash.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
@@ -342,7 +440,7 @@ window.Reports.s4 = async function s4(wb) {
       return (i === 0 || i === calcLabels.length - 1) ? { idx: i, color: 'BFBFBF' } : null;
     }).filter(Boolean);
     s4Placements.push({
-      sheetName: 'Dashboard', anchor: { fromCol: 6, fromRow: 1, toCol: 15, toRow: 20 }, // ~"G2"
+      sheetName: DASH_SHEET, anchor: { fromCol: 6, fromRow: 1, toCol: 15, toRow: 20 }, // ~"G2"
       def: {
         grouping: 'clustered', legend: false, title: 'Cumulative Risk Treatment Progress',
         chartBg: '000000', plotBg: '000000', axisColor: 'FFFFFF',
@@ -350,16 +448,16 @@ window.Reports.s4 = async function s4(wb) {
         // set_x_axis({label_position: "low"}) — the bars carry their own labels.
         hideValAx: true, catTickLblPos: 'low',
         dataLabels: { position: 'ctr', color: 'FFFFFF' },
-        categories: { ref: R('Dashboard', 1, s4First, s4Last), cache: calcLabels },
+        categories: { ref: R(DASH_SHEET, 1, s4First, s4Last), cache: calcLabels },
         series: [
           { name: { lit: 'Progress' },
-            values: { ref: R('Dashboard', 2, s4First, s4Last), cache: calcValues }, color: 'FFC000', points: s4Points },
+            values: { ref: R(DASH_SHEET, 2, s4First, s4Last), cache: calcValues }, color: 'FFC000', points: s4Points },
         ],
       },
     });
   }
 
-  var wsHistUsed = workbook.addWorksheet('History Used');
+  var wsHistUsed = workbook.addWorksheet(HIST_USED_SHEET);
   historyGrid.forEach(function (r) { wsHistUsed.addRow(r); });
   wsHistUsed.columns.forEach(function (c) { c.width = 16; });
   histPctCells.forEach(function (rc) { wsHistUsed.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
@@ -371,18 +469,46 @@ window.Reports.s4 = async function s4(wb) {
   }
 
   var historyWorkbook = new ExcelJS.Workbook();
-  var wsHistOnly = historyWorkbook.addWorksheet('Sheet1');
+  var wsHistOnly = historyWorkbook.addWorksheet(HIST_SHEET);
   historyGrid.forEach(function (r) { wsHistOnly.addRow(r); });
   wsHistOnly.columns.forEach(function (c) { c.width = 16; });
   histPctCells.forEach(function (rc) { wsHistOnly.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
   var historyBuf = await historyWorkbook.xlsx.writeBuffer();
 
+  // ── Execution summary (step 29) ──
+  // The script's closing print() block (automation.py:353-362). There is no
+  // console here, so it is returned as stdout: buildPayload passes that
+  // straight through and the results view renders it in the "Script log"
+  // panel, which until now always read "No console output."
+  var storageNote = !storageOk
+    ? 'unavailable (private mode or file:// restrictions) — this run will not be remembered'
+    : historySaved
+      ? 'saved to browser storage · ' + history.length + ' period' + (history.length === 1 ? '' : 's') + ' held'
+      : 'could not be saved (storage full or blocked)';
+  var stdout = [
+    'Done.',
+    'Input file: ' + metrics['Input File'],
+    'Month calculated: ' + metrics.Month,
+    'Open risk as on date: ' + openRisk,
+    'Closed Risk in ' + YEAR + ': ' + closedRisk,
+    'Total Risk: ' + totalRisk,
+    'Target 80%: ' + targetValue,
+    'History updated with new month: ' + (historyUpdated ? 'Yes' : 'No - month already existed'),
+    'Created/updated: ' + OUTPUT_FILE,
+    'Created/updated: ' + HISTORY_FILE,
+    '',
+    'History loaded from: ' + historySource,
+    'History store: ' + storageNote,
+    'Periods in chart: ' + periodLabels.join(', ') + '  (latest 3 of ' + history.length + ')',
+  ].join('\n');
+
   return {
     ok: true,
+    stdout: stdout,
     files: [
-      { name: 'Risk_Output.xlsx', bytes: riskOutputBuf, sheets: [{ name: 'Dashboard', grid: gPreview }, { name: 'History Used', grid: historyGrid }] },
-      { name: 'History.xlsx', bytes: historyBuf, sheets: [{ name: 'Sheet1', grid: historyGrid }] },
+      { name: OUTPUT_FILE, bytes: riskOutputBuf, sheets: [{ name: DASH_SHEET, grid: gPreview }, { name: HIST_USED_SHEET, grid: historyGrid }] },
+      { name: HISTORY_FILE, bytes: historyBuf, sheets: [{ name: HIST_SHEET, grid: historyGrid }] },
     ],
-    chartImages: { 'Dashboard': progressChartPng },
+    chartImages: (function () { var m = {}; m[DASH_SHEET] = progressChartPng; return m; })(),
   };
 };
