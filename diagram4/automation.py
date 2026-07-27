@@ -84,13 +84,6 @@ def get_period_label(df, date_created_col, date_closed_col):
     return f"{month_abbr} '26"
 
 
-def _find_optional_column(df, wanted_name):
-    """Like find_required_column but returns None instead of raising if missing."""
-    cleaned_map = {clean_column_name(col).lower(): col for col in df.columns}
-    key = clean_column_name(wanted_name).lower()
-    return cleaned_map.get(key)
-
-
 def calculate_metrics(input_file):
     """Read Excel and calculate Open, Closed, Total, Target, Risk Created."""
     if not os.path.exists(input_file):
@@ -104,42 +97,27 @@ def calculate_metrics(input_file):
     df.columns = [clean_column_name(col) for col in df.columns]
 
     stage_col = find_required_column(df, "Stage")
-    date_created_col = _find_optional_column(df, "Date created")
-    date_closed_col = _find_optional_column(df, "Date closed")
+    date_created_col = find_required_column(df, "Date created")
+    date_closed_col = find_required_column(df, "Date closed")
 
     df[stage_col] = df[stage_col].apply(normalize_stage)
+    df[date_created_col] = pd.to_datetime(df[date_created_col], errors="coerce")
+    df[date_closed_col] = pd.to_datetime(df[date_closed_col], errors="coerce")
 
-    if date_created_col:
-        df[date_created_col] = pd.to_datetime(df[date_created_col], errors="coerce")
-    if date_closed_col:
-        df[date_closed_col] = pd.to_datetime(df[date_closed_col], errors="coerce")
-
-    # Open risk = all rows in open stages (no year filter needed)
+    # Matches your screenshot logic:
+    # Open risk as on date = all rows in open stages, not limited by year.
     open_risk = int(df[df[stage_col].isin(OPEN_STAGES)].shape[0])
 
-    # Closed Risk: prefer year-filtered count when date_closed exists, else all Monitoring rows
-    if date_closed_col:
-        closed_risk = int(df[(df[stage_col] == CLOSED_STAGE) & (df[date_closed_col].dt.year == YEAR)].shape[0])
-    else:
-        closed_risk = int(df[df[stage_col] == CLOSED_STAGE].shape[0])
+    # Closed Risk in 2026 = Monitoring rows closed in YEAR.
+    closed_risk = int(df[(df[stage_col] == CLOSED_STAGE) & (df[date_closed_col].dt.year == YEAR)].shape[0])
 
     total_risk = int(open_risk + closed_risk)
 
-    # Risk Created: use date_created if available, else fall back to 0
-    if date_created_col:
-        risk_created = int(df[df[date_created_col].dt.year == YEAR].shape[0])
-    else:
-        risk_created = 0
+    # Risk Created in 2026 = all rows where Date created year is 2026.
+    risk_created = int(df[df[date_created_col].dt.year == YEAR].shape[0])
 
     target_value = int(round(total_risk * TARGET_PERCENT, 0))
-
-    # Period label: derive from dates if available, else use current month
-    if date_created_col or date_closed_col:
-        period_label = get_period_label(df, date_created_col or date_closed_col, date_closed_col or date_created_col)
-    else:
-        now = datetime.now()
-        month_abbr = now.strftime("%b")
-        period_label = "Q1 '26" if month_abbr == "Mar" else f"{month_abbr} '{str(now.year)[2:]}"
+    period_label = get_period_label(df, date_created_col, date_closed_col)
 
     return {
         "Month": period_label,

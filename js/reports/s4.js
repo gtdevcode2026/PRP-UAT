@@ -93,33 +93,23 @@ window.Reports.s4 = async function s4(wb) {
   var TARGET_LABEL = "Target '26";
   var TARGET_PERCENT = 0.80;
   var SEED_HISTORY_WHEN_MISSING = true;
-  // A month must hold at least this share of the year's dated rows to be
-  // treated as the reporting period. A real month carries roughly 1/N of the
-  // file; a handful of future-dated or mistyped rows must not name the report.
-  // Raise it if stray months still slip through, lower it if a genuine (very
-  // partial) month is being skipped — the summary always says what it ignored.
-  var PERIOD_MIN_SHARE = 0.05;
   var SEED_ROWS = [
     { Month: "Q1 '26", 'Open risk as on date': 655, 'Closed Risk in 2026': 41, 'Total Risk': 696, 'Risk Created in 2026': 118 },
     { Month: "Apr '26", 'Open risk as on date': 694, 'Closed Risk in 2026': 42, 'Total Risk': 736, 'Risk Created in 2026': 158 },
   ];
   var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  // Strips what a plain trim leaves behind. Exports carry zero-width spaces,
-  // BOM and non-breaking spaces; Stage is matched by exact lookup against
-  // OPEN_STAGES, so one invisible character silently drops a risk from the
-  // count with nothing on screen to explain the discrepancy.
+  // clean_column_name / normalize_stage — remove \r and \n, then strip. That is
+  // all the script does, so that is all this does: a widened cleaner would make
+  // this report count rows the reference output does not.
   function clean(v) {
-    if (E.isBlank(v)) return '';
-    return String(v)
-      .replace(/[​-‍﻿]/g, '')
-      .replace(/[   ]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'number' && Number.isNaN(v)) return '';
+    return String(v).replace(/[\r\n]/g, '').trim();
   }
 
   // Name the sheet AND what the workbook actually contains — "not found" on its
-  // own gives the user nothing to act on (automation.py:100 lists them too).
+  // own gives the user nothing to act on, and the script lists them too.
   if (wb && Array.isArray(wb.SheetNames) && wb.SheetNames.indexOf(SHEET_NAME) === -1) {
     throw new Error("Sheet '" + SHEET_NAME + "' not found. Available sheets: " + wb.SheetNames.join(', '));
   }
@@ -130,119 +120,66 @@ window.Reports.s4 = async function s4(wb) {
     sheet.headers.forEach(function (h, i) { out[cleanedHeaders[i]] = row[h]; });
     return out;
   });
-  // Column resolution (spec step 7: "do not assume exact formatting").
-  //
-  // An exact name match is far too brittle for a real export: "Date created"
-  // arrives as "Created Date", "Date Created (UTC)", "Date created on"... When
-  // the date columns went unresolved the report fell back to the system clock
-  // and labelled itself with the month it was RUN in, so a May workbook
-  // reported "Jul '26" with nothing on screen to say the label was invented.
-  // Match on the words instead: every token of the wanted name must appear in
-  // the header, preferring an exact hit and then the shortest candidate.
-  var norm = function (s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); };
-  var normalized = cleanedHeaders.map(norm);
-  function findColumn(name) {
-    var want = norm(name);
-    var exact = normalized.indexOf(want);
-    if (exact !== -1) return cleanedHeaders[exact];
-    var tokens = want.split(' ');
-    var hits = [];
-    normalized.forEach(function (h, i) {
-      var words = h.split(' ');
-      if (tokens.every(function (t) { return words.indexOf(t) !== -1; })) hits.push(i);
-    });
-    if (!hits.length) return null;
-    hits.sort(function (a, b) { return normalized[a].length - normalized[b].length; });
-    return cleanedHeaders[hits[0]];
-  }
+
+  // find_required_column: {clean(col).lower(): col} and an exact lookup. Not a
+  // fuzzy match — an earlier version matched on word tokens, so "Date Created
+  // (UTC)" resolved where the script would have raised. Both date columns are
+  // required, so an unresolved one stops the run instead of being worked around.
+  var lowered = cleanedHeaders.map(function (h) { return h.toLowerCase(); });
   function findRequiredColumn(name) {
-    var key = findColumn(name);
-    if (!key) {
-      throw new Error("Required column '" + name + "' was not found. Columns present: " + cleanedHeaders.join(', '));
+    var i = lowered.indexOf(clean(name).toLowerCase());
+    if (i === -1) {
+      throw new Error("Required column '" + name + "' was not found. Available columns: " + cleanedHeaders.join(', '));
     }
-    return key;
+    return cleanedHeaders[i];
   }
-  function findOptionalColumn(name) { return findColumn(name); }
 
   var stageCol = findRequiredColumn('Stage');
-  var dateCreatedCol = findOptionalColumn('Date created');
-  var dateClosedCol = findOptionalColumn('Date closed');
+  var dateCreatedCol = findRequiredColumn('Date created');
+  var dateClosedCol = findRequiredColumn('Date closed');
 
   rows.forEach(function (r) { r[stageCol] = clean(r[stageCol]); });
 
   var openRisk = rows.filter(function (r) { return OPEN_STAGES.hasOwnProperty(r[stageCol]); }).length;
-  var closedRisk;
-  if (dateClosedCol) {
-    closedRisk = rows.filter(function (r) { return r[stageCol] === CLOSED_STAGE && E.excelYear(r[dateClosedCol]) === YEAR; }).length;
-  } else {
-    closedRisk = rows.filter(function (r) { return r[stageCol] === CLOSED_STAGE; }).length;
-  }
+  var closedRisk = rows.filter(function (r) { return r[stageCol] === CLOSED_STAGE && E.excelYear(r[dateClosedCol]) === YEAR; }).length;
   var totalRisk = openRisk + closedRisk;
-  var riskCreated = dateCreatedCol ? rows.filter(function (r) { return E.excelYear(r[dateCreatedCol]) === YEAR; }).length : 0;
+  var riskCreated = rows.filter(function (r) { return E.excelYear(r[dateCreatedCol]) === YEAR; }).length;
   var targetValue = Math.round(totalRisk * TARGET_PERCENT);
 
-  // ── Reporting period — derived from the DATA, never from the clock ──
+  // get_period_label — the LATEST 2026 date found in either date column names
+  // the reporting period. March maps to "Q1 '26"; every other month is written
+  // out. The clock is not consulted.
   //
-  // The system clock is not consulted anywhere in this derivation. It used to
-  // be, twice, and both were wrong: unresolved date columns fell back to "the
-  // month the report was run in" (a May workbook reported Jul '26), and the
-  // future-date guard compared against today, so the same workbook could label
-  // itself differently depending on when it was opened. A dashboard built from
-  // a fixed export must produce the same period every time it is run.
-  //
-  // Months are tallied from the file, and the period is the LAST month that
-  // carries real volume. A reporting month has substance; a lone row dated
-  // 2026-12-14 — a scheduled closure date, a mistyped year — is noise, and
-  // letting it name the period is what produced a phantom "Dec '26" column.
-  // Anything skipped is named in the execution summary, never dropped quietly.
-  var periodSource, monthTally = [], skippedMonths = [];
-
-  // Month -> reporting label (spec step 4). Jan, Feb and Mar all fall inside
-  // Q1, which is why step 17's display order reads "Q1, Apr, May ... Dec" with
-  // no Jan or Feb slot — only April onward are reported as individual months.
-  // The year suffix is derived from YEAR rather than written out, so changing
-  // the reporting year in the config block carries through here.
-  function periodLabelForMonth(m) {
-    var yy = " '" + String(YEAR).slice(2);
-    return m <= 3 ? ('Q1' + yy) : (MONTH_ABBR[m - 1] + yy);
-  }
+  // Note this is max(), not "the last month carrying real volume": a single row
+  // dated 2026-12-14 IS the latest date and so names the period "Dec '26", even
+  // if every other row is May. That is the script's behaviour and it is what
+  // this port reproduces; the month tally is reported in the run summary so a
+  // surprising label can at least be traced to the row that caused it.
+  var monthTally = [], latestMonth = null;
 
   function getPeriodLabel() {
-    var byMonth = {}, total = 0;
+    var byMonth = {}, latest = null;
     [dateCreatedCol, dateClosedCol].forEach(function (col) {
-      if (!col) return;
+      var colLatest = null;
       rows.forEach(function (r) {
         var d = E.excelDateInfo(r[col]);
         if (!d || d.year !== YEAR) return;
-        total++;
         byMonth[d.month] = (byMonth[d.month] || 0) + 1;
+        var key = d.month * 1e6 + d.day * 1e4 + (d.hour || 0) * 100 + (d.minute || 0);
+        if (colLatest === null || key > colLatest) colLatest = key;
       });
+      // dates.append(s.max()) per column, then max(dates) across them.
+      if (colLatest !== null && (latest === null || colLatest > latest)) latest = colLatest;
     });
-    var months = Object.keys(byMonth).map(Number).sort(function (a, b) { return a - b; });
-    if (!months.length) {
-      throw new Error('No valid ' + YEAR + ' dates found in ' +
-        [dateCreatedCol, dateClosedCol].filter(Boolean).join(' / ') + '.');
+    if (latest === null) {
+      throw new Error('No valid ' + YEAR + ' dates found in Date created/Date closed columns.');
     }
-    monthTally = months.map(function (m) { return MONTH_ABBR[m - 1] + ' ×' + byMonth[m]; });
-
-    var floor = Math.max(2, Math.ceil(total * PERIOD_MIN_SHARE));
-    var solid = months.filter(function (m) { return byMonth[m] >= floor; });
-    var pool = solid.length ? solid : months;
-    var chosen = pool[pool.length - 1];
-    skippedMonths = months.filter(function (m) { return m > chosen; })
-      .map(function (m) { return MONTH_ABBR[m - 1] + ' ×' + byMonth[m]; });
-
-    periodSource = 'the file — ' + byMonth[chosen] + ' of ' + total + ' dated rows fall in ' + MONTH_ABBR[chosen - 1] +
-      (skippedMonths.length ? '; ignored as noise: ' + skippedMonths.join(', ') + ' (under ' + floor + ' rows)' : '');
-    return periodLabelForMonth(chosen);
+    var months = Object.keys(byMonth).map(Number).sort(function (a, b) { return a - b; });
+    monthTally = months.map(function (m) { return MONTH_ABBR[m - 1] + ' x' + byMonth[m]; });
+    latestMonth = Math.floor(latest / 1e6);
+    return latestMonth === 3 ? "Q1 '26" : (MONTH_ABBR[latestMonth - 1] + " '26");
   }
 
-  if (!dateCreatedCol && !dateClosedCol) {
-    // Guessing the period from the clock is how a May workbook came to report
-    // July. With nothing in the data to read, refuse rather than invent.
-    throw new Error('Cannot determine the reporting period: no "Date created" or "Date closed" column was found. ' +
-      'Columns present: ' + cleanedHeaders.join(', '));
-  }
   var periodLabel = getPeriodLabel();
 
   var processedOn = (function () {
@@ -314,17 +251,12 @@ window.Reports.s4 = async function s4(wb) {
     return m ? (order[m[1]] || 99) : 99;
   }
   var sortedHistory = history.slice().sort(function (a, b) { return periodSortKey(a.Month) - periodSortKey(b.Month); });
-  // The dashboard is "as on" the period THIS file describes. A stored period
-  // that falls after it came from some other export and cannot belong here —
-  // left in, it takes one of the three chart columns and pushes a real period
-  // (Q1) off the left edge, which is how a May report came to show Apr/May/Jul.
-  // The row stays in storage; it is not wrong, just not this report. This makes
-  // the chart a function of the file alone, whatever else storage happens to
-  // hold, so the same workbook always renders the same three periods.
-  var currentKey = periodSortKey(periodLabel);
-  var laterPeriods = sortedHistory.filter(function (r) { return periodSortKey(r.Month) > currentKey; })
-    .map(function (r) { return r.Month; });
-  var graphHistory = sortedHistory.filter(function (r) { return periodSortKey(r.Month) <= currentKey; }).slice(-3);
+  // history.tail(3) — the last three periods by sort order, with no reference to
+  // the period THIS file describes. A stored period later than this one still
+  // takes a chart column and pushes an earlier real period off the left edge
+  // (a May report showing Apr/May/Jul). That is the script's behaviour; the run
+  // summary lists every held period so the three on show can be accounted for.
+  var graphHistory = sortedHistory.slice(-3);
   var periodLabels = graphHistory.map(function (r) { return r.Month; });
   var targetForTable = Math.round(totalRisk * TARGET_PERCENT);
 
@@ -382,13 +314,10 @@ window.Reports.s4 = async function s4(wb) {
     setCell0(g, excelRow, 1, calcValues[r]);
     setPercent0(g, excelRow, 2, calcPercents[r]);
   });
-  // Show the arithmetic, not just the rule. "Target = 80% of latest Total Risk"
-  // is unfalsifiable on its own; spelling out the inputs makes a wrong Target
-  // immediately traceable to the number that produced it.
+  // The script's wording, verbatim. The arithmetic behind it (which inputs made
+  // this Target) is in the run summary instead, where it cannot alter the sheet.
   setCell0(g, startRow + 1 + calcLabels.length, 0, 'Note');
-  setCell0(g, startRow + 1 + calcLabels.length, 1,
-    'Target = ' + Math.round(TARGET_PERCENT * 100) + '% of Total Risk (' + openRisk + ' open + ' +
-    closedRisk + ' closed = ' + totalRisk + ') = ' + targetForTable);
+  setCell0(g, startRow + 1 + calcLabels.length, 1, 'Target = 80% of latest Total Risk');
 
   var chartStart = startRow + 10;
   setCell0(g, chartStart, 0, 'Chart Label');
@@ -575,15 +504,20 @@ window.Reports.s4 = async function s4(wb) {
     'Created/updated: ' + OUTPUT_FILE,
     'Created/updated: ' + HISTORY_FILE,
     '',
-    'Reporting period from: ' + periodSource,
-    'Date columns used: ' + [dateCreatedCol, dateClosedCol].filter(Boolean).join(' / '),
+    // Everything below is browser-side context with no counterpart in the
+    // script — it explains the label rather than changing it. The month tally
+    // matters most: the period is the LATEST 2026 date, so a single stray row
+    // can name it, and this is the line that shows you that row exists.
+    'Reporting period: latest ' + YEAR + ' date in ' + dateCreatedCol + ' / ' + dateClosedCol +
+      ' falls in ' + MONTH_ABBR[latestMonth - 1],
     'Dates by month in file: ' + monthTally.join(', '),
+    'Target arithmetic: ' + Math.round(TARGET_PERCENT * 100) + '% of Total Risk (' + openRisk +
+      ' open + ' + closedRisk + ' closed = ' + totalRisk + ') = ' + targetValue,
     'History loaded from: ' + historySource,
     'History store: ' + storageNote,
-    'Periods in chart: ' + periodLabels.join(', ') + '  (latest 3 of ' + history.length + ')',
-  ].concat(laterPeriods.length
-    ? ['Held but not charted: ' + laterPeriods.join(', ') + '  (later than ' + periodLabel + ', this file\'s period)']
-    : []).join('\n');
+    'Periods held: ' + history.map(function (r) { return r.Month; }).join(', '),
+    'Periods in chart: ' + periodLabels.join(', ') + '  (last 3 of ' + history.length + ')',
+  ].join('\n');
 
   return {
     ok: true,
