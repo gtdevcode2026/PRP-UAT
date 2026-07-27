@@ -135,10 +135,12 @@ window.Reports.d2 = async function d2(wb) {
   filtered.forEach(function (r) { r['Org Display'] = E.mapZone(r.Organization, ORG_MAP); });
 
   // values="ID", aggfunc="count" — pandas counts non-null IDs, NOT rows, so a
-  // Cyber/2026 row with a blank ID is excluded from the pivot even though it
-  // still counts toward the KPI totals below (which use len(filtered)). That
-  // asymmetry is the script's, and the Grand Total row may legitimately come
-  // out lower than the "(closed/record)" figure in the chart title.
+  // Cyber/2026 row with a blank ID never reaches the pivot. Q2 is defined as
+  // Closed / Grand Total — read off the pivot's own total row — so it is
+  // computed from these counts below, not from len(filtered). The script
+  // divides by len(filtered) while labelling the result "Grand Total"; on a
+  // sheet with a blank ID the two disagree and the published percentage
+  // contradicts the table printed directly above it.
   var pivotRaw = E.pivotCount(filtered, function (r) { return r['Org Display']; }, function (r) { return r['Final Stage']; }, { margins: false, valueFn: function (r) { return r.ID; } });
   var headers = pivotRaw.headers.slice();
   var dataRows = pivotRaw.rows.map(function (r) { return r.slice(); });
@@ -172,8 +174,13 @@ window.Reports.d2 = async function d2(wb) {
     return n / 100;
   }
 
-  var closedTotal = filtered.filter(function (r) { return r['Final Stage'] === 'Closed'; }).length;
-  var recordTotal = filtered.length;
+  // Q2 '26 = Closed / Grand Total, both taken from the pivot's total row so the
+  // percentage always reconciles against the table above it. keptRows — how many
+  // rows passed the filter — can be higher when IDs are blank; that gap is
+  // reported in the run summary rather than silently moving the denominator.
+  var keptRows = filtered.length;
+  var closedTotal = totalClosed;
+  var recordTotal = totalGrand;
   var q2_26 = recordTotal ? pyRound2(closedTotal / recordTotal) : 0;
   // kpi_data — the Q2 remark is the script's empty string. A 0% here is either
   // a real measurement or the filter finding nothing, and the two look
@@ -250,8 +257,9 @@ window.Reports.d2 = async function d2(wb) {
     return String(y);
   });
 
-  var q2Reason = !recordTotal ? 'nothing passed the filter — the 0% is not a measurement'
-    : (!closedTotal ? 'rows passed the filter, none are at a Closed stage' : '');
+  var q2Reason = !keptRows ? 'nothing passed the filter — the 0% is not a measurement'
+    : (!recordTotal ? keptRows + ' row(s) passed the filter but every ID is blank, so the pivot counted nothing — the 0% is not a measurement'
+    : (!closedTotal ? 'rows passed the filter, none are at a Closed stage' : ''));
   var lines = [
     'SUCCESS',
     'output file D2.xlsx',
@@ -271,14 +279,21 @@ window.Reports.d2 = async function d2(wb) {
     '  Rows read:            ' + rows.length,
     '  Tags = Cyber:         ' + tagOnly,
     '  Date created in 2026: ' + yearOnly,
-    '  Kept (both):          ' + recordTotal,
+    '  Kept (both):          ' + keptRows,
     '',
     'Stage of the kept rows:',
     '  Closed: ' + closedTotal,
-    '  Open:   ' + (recordTotal - closedTotal),
+    '  Open:   ' + totalOpen,
     '',
-    "Q2 '26 = Closed / Kept = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%'
+    "Q2 '26 = Closed / Grand Total = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%'
   );
+  // The pivot counts IDs, so a blank ID drops a row from the Grand Total while
+  // it still passed the filter. Say so, otherwise the two numbers above look
+  // like an arithmetic error.
+  if (keptRows !== recordTotal) {
+    lines.push('  ^ ' + (keptRows - recordTotal) + ' kept row(s) have a blank ID and are not counted in the' +
+      ' Grand Total (the pivot counts IDs, not rows).');
+  }
   if (q2Reason) lines.push('  ^ ' + q2Reason);
   // A number produced by anything other than the script's own rule is still
   // correct, but it is no longer a like-for-like reproduction of the reference
@@ -293,8 +308,8 @@ window.Reports.d2 = async function d2(wb) {
     '',
     'Values present in the file:',
     '  Tags:         ' + distinct(rows.map(function (r) { return r.Tags; }), 8),
-    '  Stage:        ' + distinct((recordTotal ? filtered : rows).map(function (r) { return r.Stage; }), 8) +
-      (recordTotal ? '   (kept rows)' : '   (whole sheet — nothing passed the filter)'),
+    '  Stage:        ' + distinct((keptRows ? filtered : rows).map(function (r) { return r.Stage; }), 8) +
+      (keptRows ? '   (kept rows)' : '   (whole sheet — nothing passed the filter)'),
     '  Date created: ' + distinct(yearsSeen, 8) +
       (unparsedDates ? '   — ' + unparsedDates + ' cell(s) could not be read as a date' : '')
   );
