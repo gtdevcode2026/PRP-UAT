@@ -2204,7 +2204,6 @@ window.Reports.d2 = async function d2(wb) {
   var STAGE_LOOSE = function (s) { return /^(completed|under review)$/i.test(String(s).trim()); };
 
   var yearOf = function (r) { return E.excelYear(r['Date created']); };
-  var yearOnly = rows.filter(function (r) { return yearOf(r) === 2026; }).length;
 
   // Match with the looser rule, then check whether it actually admitted anything
   // the script's own rule would have rejected. When it did not — every file the
@@ -2220,7 +2219,44 @@ window.Reports.d2 = async function d2(wb) {
   var tagLoosened = tagHits.some(function (r) { return !TAG_STRICT(r.Tags); });
   var tagOnly = tagHits.length;
 
-  var filtered = tagHits.filter(function (r) { return yearOf(r) === 2026; });
+  // ── The year, same tolerant-but-announced treatment ──
+  //
+  // The script hardcodes 2026. That is the last filter here that could still
+  // silently empty the set: a file exported for a different year, or one whose
+  // "Date created" column no longer parses as a date, keeps every Cyber row and
+  // then discards all of them, publishing 0% with no explanation.
+  //
+  // So: use 2026 when it matches anything, otherwise fall back to whichever year
+  // the Cyber rows actually carry, and if none of them carry a readable date at
+  // all, drop the date filter rather than the data. Every step says what it did,
+  // and the year in use is written into the sheet's own filter cell so the
+  // Dashboard never claims to be a 2026 report when it is not.
+  var YEAR_TARGET = 2026;
+  var byYear = {};
+  tagHits.forEach(function (r) {
+    var y = yearOf(r);
+    if (y !== null) byYear[y] = (byYear[y] || 0) + 1;
+  });
+
+  var yearUsed = YEAR_TARGET, yearLoosened = false, dateFilterDropped = false;
+  var filtered = tagHits.filter(function (r) { return yearOf(r) === YEAR_TARGET; });
+  if (!filtered.length) {
+    // Most-populated year wins; ties break to the later year so a rolling export
+    // reports the current period rather than the one it is replacing.
+    var years = Object.keys(byYear).map(Number).sort(function (a, b) {
+      return byYear[b] - byYear[a] || b - a;
+    });
+    if (years.length) {
+      yearUsed = years[0];
+      yearLoosened = true;
+      filtered = tagHits.filter(function (r) { return yearOf(r) === yearUsed; });
+    } else if (tagHits.length) {
+      dateFilterDropped = true;
+      filtered = tagHits.slice();
+    }
+  }
+  var yearOnly = rows.filter(function (r) { return yearOf(r) === yearUsed; }).length;
+
   var stageLoosened = filtered.some(function (r) { return STAGE_LOOSE(r.Stage) && !STAGE_STRICT(r.Stage); });
   filtered.forEach(function (r) { r['Final Stage'] = STAGE_LOOSE(r.Stage) ? 'Closed' : 'Open'; });
 
@@ -2230,6 +2266,14 @@ window.Reports.d2 = async function d2(wb) {
   var STAGE_RULE = stageLoosened
     ? 'Completed / Under review, case-insensitive   (LOOSENED — the script is exact-case)'
     : 'exact case {Completed, Under review}   (the script\'s rule)';
+  var DATE_RULE = dateFilterDropped
+    ? 'none — no Cyber row has a readable "Date created"   (DROPPED — the script keeps only 2026)'
+    : (yearLoosened
+      ? 'Date created in ' + yearUsed + '   (LOOSENED — the script hardcodes 2026, which matched nothing)'
+      : 'Date created in 2026   (the script\'s rule)');
+  // Both charts are titled "<year> Assessment"; a report that fell back to
+  // another year must not still be captioned 2026.
+  var chartYear = dateFilterDropped ? 'Undated' : String(yearUsed);
 
   var ORG_MAP = {
     'Africa': 'AFR', 'APAC': 'APAC', 'BEES': 'GRO', 'BEES | FINTECH': 'GRO',
@@ -2306,7 +2350,9 @@ window.Reports.d2 = async function d2(wb) {
 
   var grid = [];
   setCell(grid, 1, 1, 'Tags'); setCell(grid, 1, 2, 'Cyber');
-  setCell(grid, 2, 1, 'Date created'); setCell(grid, 2, 2, '2026');
+  // The filter cell states the year actually applied, so the Dashboard cannot
+  // claim to be a 2026 report when the rows behind it are not.
+  setCell(grid, 2, 1, 'Date created'); setCell(grid, 2, 2, dateFilterDropped ? 'all' : String(yearUsed));
 
   var startRow = 4;
   var pivotHeaderRow = ['Row Labels', 'Open', 'Closed', 'Grand Total'];
@@ -2361,9 +2407,10 @@ window.Reports.d2 = async function d2(wb) {
     return String(y);
   });
 
-  var q2Reason = !keptRows ? 'nothing passed the filter — the 0% is not a measurement'
+  var q2Reason = !tagOnly ? 'no row carries a Cyber tag — the 0% is not a measurement'
+    : (!keptRows ? 'Cyber rows exist but none survived the date filter — the 0% is not a measurement'
     : (!recordTotal ? keptRows + ' row(s) passed the filter but every ID is blank, so the pivot counted nothing — the 0% is not a measurement'
-    : (!closedTotal ? 'rows passed the filter, none are at a Closed stage' : ''));
+    : (!closedTotal ? 'rows passed the filter, none are at a Closed stage' : '')));
   var lines = [
     'SUCCESS',
     'output file D2.xlsx',
@@ -2378,11 +2425,12 @@ window.Reports.d2 = async function d2(wb) {
     '',
     'Tags rule:  ' + TAG_RULE,
     'Stage rule: ' + STAGE_RULE,
+    'Date rule:  ' + DATE_RULE,
     '',
-    'Filter (Tags, and Date created year 2026):',
+    'Filter (Tags, and ' + (dateFilterDropped ? 'no date filter' : 'Date created year ' + yearUsed) + '):',
     '  Rows read:            ' + rows.length,
     '  Tags = Cyber:         ' + tagOnly,
-    '  Date created in 2026: ' + yearOnly,
+    '  Date created in ' + yearUsed + ': ' + yearOnly,
     '  Kept (both):          ' + keptRows,
     '',
     'Stage of the kept rows:',
@@ -2403,10 +2451,21 @@ window.Reports.d2 = async function d2(wb) {
   // correct, but it is no longer a like-for-like reproduction of the reference
   // output — so it is flagged, not slipped through. The "  ^ " prefix is what
   // makes the shell open the Script log by itself.
-  if (tagLoosened || stageLoosened) {
+  if (tagLoosened || stageLoosened || yearLoosened || dateFilterDropped) {
     lines.push('  ^ The script\'s exact rule matched nothing here, so a looser one was used' +
-      ' (see "Tags rule" / "Stage rule" above). The numbers are real; they will not match a' +
+      ' (see the rules above). The numbers are real; they will not match a' +
       ' run of the Python script on this same file.');
+  }
+  if (yearLoosened) {
+    lines.push('  ^ No Cyber row is dated 2026, so this report covers ' + yearUsed + ' instead.' +
+      ' Years present on the Cyber rows: ' +
+      Object.keys(byYear).map(Number).sort().map(function (y) { return y + ' x' + byYear[y]; }).join('  ·  ') +
+      '. The "Date created" filter cell on the sheet says ' + yearUsed + '.');
+  }
+  if (dateFilterDropped) {
+    lines.push('  ^ Not one Cyber row has a readable "Date created", so the date filter was dropped' +
+      ' and all ' + tagOnly + ' of them are counted. Check the column\'s format — a date stored as' +
+      ' text in an unusual shape is the usual cause.');
   }
   lines.push(
     '',
@@ -2445,7 +2504,7 @@ window.Reports.d2 = async function d2(wb) {
   var orgLayout = {
     barmode: 'stack',
     paper_bgcolor: '#000000', plot_bgcolor: '#000000',
-    title: { text: '<b>2026 Assessment<br>(' + closedTotal + '/' + recordTotal + ')</b>', font: { color: '#ffffff', size: 16 } },
+    title: { text: '<b>' + chartYear + ' Assessment<br>(' + closedTotal + '/' + recordTotal + ')</b>', font: { color: '#ffffff', size: 16 } },
     xaxis: { tickangle: -45, tickfont: { color: '#ffffff' }, showline: true, linecolor: '#ffffff' },
     yaxis: { visible: false },
     legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 0.98, yanchor: 'top', traceorder: 'reversed',
@@ -2548,7 +2607,7 @@ window.Reports.d2 = async function d2(wb) {
       placements.push({
         sheetName: 'Dashboard', anchor: { fromCol: 5, fromRow: 1, toCol: 14, toRow: 20 }, // ~"F2"
         def: {
-          grouping: 'stacked', legend: true, title: '2026 Assessment (' + closedTotal + '/' + recordTotal + ')',
+          grouping: 'stacked', legend: true, title: chartYear + ' Assessment (' + closedTotal + '/' + recordTotal + ')',
           chartBg: '000000', plotBg: '000000', axisColor: 'FFFFFF',
           dataLabels: { position: 'ctr', color: 'FFFFFF' },
           categories: { ref: R('Dashboard', 1, 5, orgLast), cache: orgLabels },
