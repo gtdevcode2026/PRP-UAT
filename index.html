@@ -2923,6 +2923,38 @@ window.Reports.d2 = async function d2(wb) {
     : '  No other column reproduces the published closed count of ' + closedTotal +
       ' — Stage is the only evidence for it.');
 
+  // ── The port's own receipt ──────────────────────────────────────────────
+  //
+  // "Does the JS match the Python?" is the question this whole report keeps
+  // being asked, and answering it has meant running the .py by hand on a file I
+  // cannot see. So run the script's literal rules here too — whole-cell
+  // (?i)^cyber$ on Tags, Date created year == 2026, exact-case Stage, divided by
+  // len(filtered) exactly as automation.py does — and print what IT would
+  // publish beside what this app published. Identical figures mean the port is
+  // faithful on this file; different figures are explained line by line in
+  // WARNINGS above. No Python installation needed to check.
+  var strictRows = rows.filter(function (r) {
+    return TAG_STRICT(r.Tags) && E.excelYear(r['Date created']) === 2026;
+  });
+  var strictClosed = strictRows.filter(function (r) { return STAGE_STRICT(r.Stage); }).length;
+  var strictTotal = strictRows.length;
+  var strictQ2 = strictTotal ? pyRound2(strictClosed / strictTotal) : 0;
+  var sameAsScript = strictClosed === closedTotal && strictTotal === recordTotal;
+
+  lines.push('', section('WHAT automation.py WOULD PUBLISH'));
+  lines.push('  Its literal rules — Tags cell = "cyber", Date created year 2026, exact-case Stage,');
+  lines.push('  divided by the number of matching ROWS — applied to this same file:');
+  lines.push('    Closed / Grand Total = ' + strictClosed + ' / ' + strictTotal +
+    ' = ' + Math.round(strictQ2 * 100) + '%');
+  lines.push('    this app published    ' + closedTotal + ' / ' + recordTotal +
+    ' = ' + Math.round(q2_26 * 100) + '%');
+  lines.push(sameAsScript
+    ? '  IDENTICAL — the port reproduces the script exactly on this file.'
+    : '  DIFFERENT — see WARNINGS above for which rule departed and why. If you expect the' +
+      ' script\'s figure, the file it produces that figure from is not this one:' +
+      ' this file has ' + rows.length + ' rows and ' + strictTotal +
+      ' of them are tagged "cyber" and dated 2026.');
+
   lines.push('', section('SAMPLE ROWS'));
   if (keptSamples.length) {
     lines.push('  kept:');
