@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-28.8';
+window.PRP_BUILD = '2026-07-28.9';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -2578,8 +2578,10 @@ window.Reports.s1c = async function s1c(wb) {
     rows,
     // GROWTH / growth arrive as case-variant zones — fold them into one
     // 'Growth' bucket so the Pivot sheet and Active-by-Zone chart show a
-    // single combined column. Other zones keep their raw casing.
-    function (r) { var z = String(r.zone_assessing); return /^growth$/i.test(z.trim()) ? 'Growth' : z; },
+    // single combined column. Compared on letters only, so invisible
+    // characters (zero-width space, NBSP) or stray punctuation in the
+    // export can't split the bucket. Other zones keep their raw casing.
+    function (r) { var z = String(r.zone_assessing); return z.replace(/[^a-z]/gi, '').toLowerCase() === 'growth' ? 'Growth' : z; },
     function (r) { return String(r.assessment_status); },
     { margins: true, marginsName: 'Grand Total' }
   );
@@ -3058,8 +3060,11 @@ window.Reports.s3d = async function s3d(wb) {
     r[organizationCol] = E.isBlank(r[organizationCol]) ? '' : String(r[organizationCol]).trim();
     // BEES and BEES | FINTECH report as one combined org named Growth —
     // normalized here, before any grouping, so the pivot, Zone Summary and
-    // their charts all see a single merged row. Case/spacing-insensitive.
-    if (/^bees(\s*\|\s*fintech)?$/i.test(r[organizationCol])) r[organizationCol] = 'Growth';
+    // their charts all see a single merged row. Compared on letters only,
+    // so case, spacing, punctuation, and invisible characters (zero-width
+    // space, NBSP) in the export can't split the bucket.
+    var orgLetters = r[organizationCol].replace(/[^a-z]/gi, '').toLowerCase();
+    if (orgLetters === 'bees' || orgLetters === 'beesfintech') r[organizationCol] = 'Growth';
     r[stageCol] = E.isBlank(r[stageCol]) ? '' : String(r[stageCol]).trim();
     r.Stage_Clean = r[stageCol].toLowerCase().trim();
   });

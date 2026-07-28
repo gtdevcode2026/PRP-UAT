@@ -46,8 +46,11 @@ window.Reports.s3d = async function s3d(wb) {
     r[organizationCol] = E.isBlank(r[organizationCol]) ? '' : String(r[organizationCol]).trim();
     // BEES and BEES | FINTECH report as one combined org named Growth —
     // normalized here, before any grouping, so the pivot, Zone Summary and
-    // their charts all see a single merged row. Case/spacing-insensitive.
-    if (/^bees(\s*\|\s*fintech)?$/i.test(r[organizationCol])) r[organizationCol] = 'Growth';
+    // their charts all see a single merged row. Compared on letters only,
+    // so case, spacing, punctuation, and invisible characters (zero-width
+    // space, NBSP) in the export can't split the bucket.
+    var orgLetters = r[organizationCol].replace(/[^a-z]/gi, '').toLowerCase();
+    if (orgLetters === 'bees' || orgLetters === 'beesfintech') r[organizationCol] = 'Growth';
     r[stageCol] = E.isBlank(r[stageCol]) ? '' : String(r[stageCol]).trim();
     r.Stage_Clean = r[stageCol].toLowerCase().trim();
   });

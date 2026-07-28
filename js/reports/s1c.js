@@ -20,8 +20,10 @@ window.Reports.s1c = async function s1c(wb) {
     rows,
     // GROWTH / growth arrive as case-variant zones — fold them into one
     // 'Growth' bucket so the Pivot sheet and Active-by-Zone chart show a
-    // single combined column. Other zones keep their raw casing.
-    function (r) { var z = String(r.zone_assessing); return /^growth$/i.test(z.trim()) ? 'Growth' : z; },
+    // single combined column. Compared on letters only, so invisible
+    // characters (zero-width space, NBSP) or stray punctuation in the
+    // export can't split the bucket. Other zones keep their raw casing.
+    function (r) { var z = String(r.zone_assessing); return z.replace(/[^a-z]/gi, '').toLowerCase() === 'growth' ? 'Growth' : z; },
     function (r) { return String(r.assessment_status); },
     { margins: true, marginsName: 'Grand Total' }
   );
