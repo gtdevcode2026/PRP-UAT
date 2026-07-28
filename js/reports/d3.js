@@ -82,17 +82,21 @@ window.Reports.d3 = async function d3(wb) {
   var files = [{ name: 'output.xlsx', sheets: [{ name: 'Summary', grid: grid }] }];
 
   // Embedded chart reproduces the original openpyxl native stacked BarChart
-  // (white background, "Completed in 2026"=red / "Pending"=orange, no data
-  // labels, axis titles) — built from the pivot BEFORE the Grand Total
-  // column/row were appended, matching the original's Reference(min_col=2,
-  // max_col=3, max_row=ws.max_row-1) which excludes both.
+  // (white background, "Completed in 2026"=red / "Pending"=orange, axis
+  // titles) — built from the pivot BEFORE the Grand Total column/row were
+  // appended, matching the original's Reference(min_col=2, max_col=3,
+  // max_row=ws.max_row-1) which excludes both. Deviation from the Python
+  // chart: white in-bar value labels (zeros hidden), same as d2/s3d.
   var D3_COLORS = { 'Completed in 2026': '#FF0000', 'Pending': '#FFC000' };
   var images = {};
   if (pivot.indexVals.length) {
     var d3Traces = W1_COLUMNS.map(function (colName, idx) {
+      var vals = baseRows.map(function (r) { return r[idx]; });
       return {
-        x: pivot.indexVals, y: baseRows.map(function (r) { return r[idx]; }),
+        x: pivot.indexVals, y: vals,
         type: 'bar', name: colName, marker: { color: D3_COLORS[colName] || '#4472C4' },
+        text: vals.map(function (v) { return v > 0 ? String(v) : ''; }),
+        textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff', size: 10 },
       };
     });
     var d3Layout = {
@@ -132,6 +136,7 @@ window.Reports.d3 = async function d3(wb) {
       sheetName: 'Summary', anchor: { fromCol: 7, fromRow: 4, toCol: 16, toRow: 21 }, // ~"H5"
       def: {
         grouping: 'stacked', legend: true, title: 'Assessments Completed vs Open', axisColor: '000000',
+        dataLabels: { position: 'ctr', color: 'FFFFFF' },
         categories: { ref: R('Summary', 1, 2, last), cache: pivot.indexVals },
         series: d3Series,
       },
