@@ -780,6 +780,45 @@ window.Reports.d2 = async function d2(wb) {
     ' particular VALUE rather than the cell being filled, the values are listed beside each' +
     ' column — name the column and value and it becomes the rule.');
 
+  // Corroboration. If an unrelated column lands on the same closed count, that
+  // is independent support for the published figure — a hand-kept "Working"
+  // column agreeing with Stage is worth more than either alone. Equally, if
+  // NOTHING in the file can produce the count someone expects, that is worth
+  // saying outright rather than leaving them to scan the table for it.
+  var agree = [];
+  rawHeaders.forEach(function (h, i) {
+    if (!h || h === resolved.Stage) return;
+    var vals = filtered.map(function (r) { return r[h]; });
+    if (vals.filter(isFilled).length === closedTotal && closedTotal > 0) {
+      agree.push(colLetter(i) + ' "' + h + '" is filled');
+      return;
+    }
+    var counts = {}, order = [];
+    vals.forEach(function (v) {
+      if (!isFilled(v)) return;
+      var k = showCellVal(v);
+      if (!counts[k]) { counts[k] = 0; order.push(k); }
+      counts[k]++;
+    });
+    if (!order.length || order.length > 8) return;
+    // Smallest set of this column's values summing to the published count.
+    var best = null;
+    for (var m = 1; m < (1 << order.length); m++) {
+      var sum = 0, picked = [];
+      for (var b = 0; b < order.length; b++) {
+        if (m & (1 << b)) { sum += counts[order[b]]; picked.push(order[b]); }
+      }
+      if (sum === closedTotal && (!best || picked.length < best.length)) best = picked;
+    }
+    if (best && closedTotal > 0) agree.push(colLetter(i) + ' "' + h + '" = ' + best.join(' + '));
+  });
+  lines.push('');
+  lines.push(agree.length
+    ? '  Corroboration — other columns that independently split ' + closedTotal + ' / ' +
+      filtered.length + ':\n' + agree.map(function (a) { return '    ' + a; }).join('\n')
+    : '  No other column reproduces the published closed count of ' + closedTotal +
+      ' — Stage is the only evidence for it.');
+
   lines.push('', section('SAMPLE ROWS'));
   if (keptSamples.length) {
     lines.push('  kept:');
