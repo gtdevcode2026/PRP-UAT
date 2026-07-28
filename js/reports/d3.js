@@ -39,7 +39,8 @@ window.Reports.d3 = async function d3(wb) {
 
   var pivot = E.pivotCount(
     filtered,
-    function (r) { return String(r[orgCol]); },
+    // BEES / Growth variants report as the single 'GRO' organization.
+    function (r) { return E.sanitizeZone(r[orgCol]); },
     function (r) { return String(r[w1Col]); },
     { margins: false }
   );

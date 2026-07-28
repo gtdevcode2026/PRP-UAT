@@ -349,6 +349,18 @@ window.ReportEngine = (function () {
     return fallback === undefined ? org : fallback;
   }
 
+  // Growth/BEES zone sanitizer, shared by every report that groups on an
+  // organization or zone column: GRO, Growth, GROWTH, BEES, BEES | FINTECH —
+  // in any casing, spacing, punctuation, or with invisible characters
+  // (zero-width space, NBSP) — all report as the single zone 'GRO'.
+  // Compared on letters only so visually-identical export variants can
+  // never split the bucket. Every other value passes through unchanged.
+  function sanitizeZone(v) {
+    var s = (v === null || v === undefined) ? '' : String(v);
+    var letters = s.replace(/[^a-z]/gi, '').toLowerCase();
+    return (letters === 'gro' || letters === 'growth' || letters === 'bees' || letters === 'beesfintech') ? 'GRO' : s;
+  }
+
   // Count pivot with pandas-matching semantics: columns sorted lexicographically
   // (code-point order, matching Python's default string sort), missing
   // index/column combinations filled with 0. If margins: a margin COLUMN
@@ -514,6 +526,7 @@ window.ReportEngine = (function () {
     s2aChartFromGrid: s2aChartFromGrid,
     groupBy: groupBy,
     mapZone: mapZone,
+    sanitizeZone: sanitizeZone,
     pivotCount: pivotCount,
     mime: mime,
     processSheets: processSheets,

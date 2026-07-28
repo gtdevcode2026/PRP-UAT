@@ -13,12 +13,15 @@ window.Reports.s2a = async function s2a(wb) {
   var B = window.ReportBridge;
 
   var STAGE_ORDER = ['Completed', 'In progress', 'Not started', 'Under review'];
+  // BEES / BEES | FINTECH / Growth variants are sanitized to 'GRO' before
+  // the allow-list filter runs (E.sanitizeZone below), so they enter as the
+  // single 'GRO' org — one row in the pivot instead of two BEES rows.
   var ORG_ORDER = [
-    'Africa', 'APAC', 'BEES', 'BEES | FINTECH', 'Europe', 'GHQ',
+    'Africa', 'APAC', 'GRO', 'Europe', 'GHQ',
     'Middle America Zone', 'North America Zone', 'South America Zone',
   ];
   var ZONE_MAP = {
-    'Africa': 'AFR', 'APAC': 'APAC', 'BEES': 'GRO', 'BEES | FINTECH': 'GRO',
+    'Africa': 'AFR', 'APAC': 'APAC', 'GRO': 'GRO',
     'Europe': 'EUR', 'GHQ': 'GHQ', 'Middle America Zone': 'MAZ',
     'North America Zone': 'NAZ', 'South America Zone': 'SAZ',
   };
@@ -38,7 +41,7 @@ window.Reports.s2a = async function s2a(wb) {
 
   rows.forEach(function (r) {
     r.Stage = E.isBlank(r.Stage) ? '' : String(r.Stage).trim();
-    r.Organization = E.isBlank(r.Organization) ? '' : String(r.Organization).trim();
+    r.Organization = E.isBlank(r.Organization) ? '' : E.sanitizeZone(String(r.Organization).trim());
     var n = parseFloat(r.Ageing);
     r.Ageing = isNaN(n) ? null : n;
   });

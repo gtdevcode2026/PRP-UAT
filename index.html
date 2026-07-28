@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-28.10';
+window.PRP_BUILD = '2026-07-28.11';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -1141,6 +1141,16 @@ window.ReportEngine = (function () {
     return map;
   }
   function mapZone(org, table, fallback) { return table.hasOwnProperty(org) ? table[org] : (fallback === undefined ? org : fallback); }
+  // Growth/BEES zone sanitizer, shared by every report that groups on an org
+  // or zone column: GRO / Growth / GROWTH / BEES / BEES | FINTECH — in any
+  // casing, spacing, punctuation, or with invisible characters (zero-width
+  // space, NBSP) — all report as the single zone 'GRO'. Letters-only compare
+  // so visually-identical export variants can never split the bucket.
+  function sanitizeZone(v) {
+    var s = (v === null || v === undefined) ? '' : String(v);
+    var letters = s.replace(/[^a-z]/gi, '').toLowerCase();
+    return (letters === 'gro' || letters === 'growth' || letters === 'bees' || letters === 'beesfintech') ? 'GRO' : s;
+  }
   // opts.valueFn mirrors pandas `values=<col>, aggfunc="count"`: only rows whose
   // value cell is non-blank are counted, while every row still contributes its
   // index/column LABEL (pandas keeps such a group, at 0). Omit it to count rows.
@@ -1230,7 +1240,7 @@ window.ReportEngine = (function () {
       return null;
     });
   }
-  return { readSheet, excelDateInfo, excelYear, isBlank, isNumericColumn, padGrid, sheetFromGrid, trimSparseRows, trimSparseCols, trimSparse, safeVal, previewRows, toTsv, chartableFromSheet, d2ChartFromGrid, s2aChartFromGrid, groupBy, mapZone, pivotCount, mime, processSheets, selectCharts };
+  return { readSheet, excelDateInfo, excelYear, isBlank, isNumericColumn, padGrid, sheetFromGrid, trimSparseRows, trimSparseCols, trimSparse, safeVal, previewRows, toTsv, chartableFromSheet, d2ChartFromGrid, s2aChartFromGrid, groupBy, mapZone, sanitizeZone, pivotCount, mime, processSheets, selectCharts };
 })();
 
 // ── Inlined: bridge.js ────────────────────────────────────────────────────
@@ -2259,12 +2269,15 @@ window.Reports.d2 = async function d2(wb) {
     r['Final Stage'] = CLOSED_STAGES.hasOwnProperty(r.Stage) ? 'Closed' : 'Open';
   });
 
+  // BEES / BEES | FINTECH / Growth variants are sanitized to 'GRO' before
+  // the map runs (E.sanitizeZone), so the map itself no longer needs keys
+  // for them; 'GRO' falls through mapZone unchanged.
   var ORG_MAP = {
-    'Africa': 'AFR', 'APAC': 'APAC', 'BEES': 'GRO', 'BEES | FINTECH': 'GRO',
+    'Africa': 'AFR', 'APAC': 'APAC',
     'Europe': 'Europe', 'GHQ': 'GHQ', 'South America Zone': 'SAZ',
     'North America Zone': 'NAZ', 'Middle America Zone': 'MAZ',
   };
-  filtered.forEach(function (r) { r['Org Display'] = E.mapZone(r.Organization, ORG_MAP); });
+  filtered.forEach(function (r) { r['Org Display'] = E.mapZone(E.sanitizeZone(r.Organization), ORG_MAP); });
 
   var pivotRaw = E.pivotCount(filtered, function (r) { return r['Org Display']; }, function (r) { return r['Final Stage']; }, { margins: false });
   var headers = pivotRaw.headers.slice();
@@ -2444,7 +2457,8 @@ window.Reports.d3 = async function d3(wb) {
 
   var pivot = E.pivotCount(
     filtered,
-    function (r) { return String(r[orgCol]); },
+    // BEES / Growth variants report as the single 'GRO' organization.
+    function (r) { return E.sanitizeZone(r[orgCol]); },
     function (r) { return String(r[w1Col]); },
     { margins: false }
   );
@@ -2576,12 +2590,10 @@ window.Reports.s1c = async function s1c(wb) {
 
   var pivot = E.pivotCount(
     rows,
-    // GROWTH / growth arrive as case-variant zones — fold them into one
-    // 'Growth' bucket so the Pivot sheet and Active-by-Zone chart show a
-    // single combined column. Compared on letters only, so invisible
-    // characters (zero-width space, NBSP) or stray punctuation in the
-    // export can't split the bucket. Other zones keep their raw casing.
-    function (r) { var z = String(r.zone_assessing); return z.replace(/[^a-z]/gi, '').toLowerCase() === 'growth' ? 'Growth' : z; },
+    // GROWTH / Growth / growth / GRO / BEES variants all fold into the
+    // single 'GRO' bucket (E.sanitizeZone) so the Pivot sheet and
+    // Active-by-Zone chart show one combined column.
+    function (r) { return E.sanitizeZone(r.zone_assessing); },
     function (r) { return String(r.assessment_status); },
     { margins: true, marginsName: 'Grand Total' }
   );
@@ -2737,12 +2749,15 @@ window.Reports.s2a = async function s2a(wb) {
   var B = window.ReportBridge;
 
   var STAGE_ORDER = ['Completed', 'In progress', 'Not started', 'Under review'];
+  // BEES / BEES | FINTECH / Growth variants are sanitized to 'GRO' before
+  // the allow-list filter runs (E.sanitizeZone below), so they enter as the
+  // single 'GRO' org — one row in the pivot instead of two BEES rows.
   var ORG_ORDER = [
-    'Africa', 'APAC', 'BEES', 'BEES | FINTECH', 'Europe', 'GHQ',
+    'Africa', 'APAC', 'GRO', 'Europe', 'GHQ',
     'Middle America Zone', 'North America Zone', 'South America Zone',
   ];
   var ZONE_MAP = {
-    'Africa': 'AFR', 'APAC': 'APAC', 'BEES': 'GRO', 'BEES | FINTECH': 'GRO',
+    'Africa': 'AFR', 'APAC': 'APAC', 'GRO': 'GRO',
     'Europe': 'EUR', 'GHQ': 'GHQ', 'Middle America Zone': 'MAZ',
     'North America Zone': 'NAZ', 'South America Zone': 'SAZ',
   };
@@ -2762,7 +2777,7 @@ window.Reports.s2a = async function s2a(wb) {
 
   rows.forEach(function (r) {
     r.Stage = E.isBlank(r.Stage) ? '' : String(r.Stage).trim();
-    r.Organization = E.isBlank(r.Organization) ? '' : String(r.Organization).trim();
+    r.Organization = E.isBlank(r.Organization) ? '' : E.sanitizeZone(String(r.Organization).trim());
     var n = parseFloat(r.Ageing);
     r.Ageing = isNaN(n) ? null : n;
   });
@@ -3057,14 +3072,10 @@ window.Reports.s3d = async function s3d(wb) {
   if (missing.length) throw new Error('Missing required columns: ' + missing.join(', '));
 
   rows.forEach(function (r) {
-    r[organizationCol] = E.isBlank(r[organizationCol]) ? '' : String(r[organizationCol]).trim();
-    // BEES and BEES | FINTECH report as one combined org named Growth —
-    // normalized here, before any grouping, so the pivot, Zone Summary and
-    // their charts all see a single merged row. Compared on letters only,
-    // so case, spacing, punctuation, and invisible characters (zero-width
-    // space, NBSP) in the export can't split the bucket.
-    var orgLetters = r[organizationCol].replace(/[^a-z]/gi, '').toLowerCase();
-    if (orgLetters === 'bees' || orgLetters === 'beesfintech') r[organizationCol] = 'Growth';
+    // BEES / BEES | FINTECH / Growth variants report as the single 'GRO'
+    // org (E.sanitizeZone), applied before any grouping so the pivot,
+    // Zone Summary and their charts all see one merged row.
+    r[organizationCol] = E.isBlank(r[organizationCol]) ? '' : E.sanitizeZone(String(r[organizationCol]).trim());
     r[stageCol] = E.isBlank(r[stageCol]) ? '' : String(r[stageCol]).trim();
     r.Stage_Clean = r[stageCol].toLowerCase().trim();
   });
@@ -3113,7 +3124,7 @@ window.Reports.s3d = async function s3d(wb) {
   );
 
   var ZONE_MAP = {
-    'Africa': 'AFR', 'APAC': 'APAC', 'Growth': 'GRO',
+    'Africa': 'AFR', 'APAC': 'APAC', 'GRO': 'GRO',
     'Europe': 'EUR', 'GHQ': 'GHQ', 'Middle America Zone': 'MAZ',
     'North America Zone': 'NAZ', 'South America Zone': 'SAZ',
   };

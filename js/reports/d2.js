@@ -42,12 +42,15 @@ window.Reports.d2 = async function d2(wb) {
     r['Final Stage'] = CLOSED_STAGES.hasOwnProperty(r.Stage) ? 'Closed' : 'Open';
   });
 
+  // BEES / BEES | FINTECH / Growth variants are sanitized to 'GRO' before
+  // the map runs (E.sanitizeZone), so the map itself no longer needs keys
+  // for them; 'GRO' falls through mapZone unchanged.
   var ORG_MAP = {
-    'Africa': 'AFR', 'APAC': 'APAC', 'BEES': 'GRO', 'BEES | FINTECH': 'GRO',
+    'Africa': 'AFR', 'APAC': 'APAC',
     'Europe': 'Europe', 'GHQ': 'GHQ', 'South America Zone': 'SAZ',
     'North America Zone': 'NAZ', 'Middle America Zone': 'MAZ',
   };
-  filtered.forEach(function (r) { r['Org Display'] = E.mapZone(r.Organization, ORG_MAP); });
+  filtered.forEach(function (r) { r['Org Display'] = E.mapZone(E.sanitizeZone(r.Organization), ORG_MAP); });
 
   var pivotRaw = E.pivotCount(filtered, function (r) { return r['Org Display']; }, function (r) { return r['Final Stage']; }, { margins: false });
   var headers = pivotRaw.headers.slice();

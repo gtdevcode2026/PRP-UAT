@@ -5,8 +5,8 @@
 // found — this makes every row "Open" on the shipped sample data, since its
 // Aging column holds text, not numbers; reproduced deliberately, not
 // "fixed" — confirmed with the user), classifies Open/Overdue (>90 days),
-// merges BEES + BEES|FINTECH into a single org named "Growth" before any
-// grouping, pivots Organization x Risk_Status, maps orgs to zones, and
+// merges BEES + BEES|FINTECH + Growth variants into a single org "GRO"
+// before any grouping, pivots Organization x Risk_Status, maps zones, and
 // builds a separate Zone Summary (Total/Open counts by org name). Writes
 // "Risk_Output.xlsx" with 3 sheets; charts anchored ~E4.
 window.Reports.s3d = async function s3d(wb) {
@@ -43,14 +43,10 @@ window.Reports.s3d = async function s3d(wb) {
   if (missing.length) throw new Error('Missing required columns: ' + missing.join(', '));
 
   rows.forEach(function (r) {
-    r[organizationCol] = E.isBlank(r[organizationCol]) ? '' : String(r[organizationCol]).trim();
-    // BEES and BEES | FINTECH report as one combined org named Growth —
-    // normalized here, before any grouping, so the pivot, Zone Summary and
-    // their charts all see a single merged row. Compared on letters only,
-    // so case, spacing, punctuation, and invisible characters (zero-width
-    // space, NBSP) in the export can't split the bucket.
-    var orgLetters = r[organizationCol].replace(/[^a-z]/gi, '').toLowerCase();
-    if (orgLetters === 'bees' || orgLetters === 'beesfintech') r[organizationCol] = 'Growth';
+    // BEES / BEES | FINTECH / Growth variants report as the single 'GRO'
+    // org (E.sanitizeZone), applied before any grouping so the pivot,
+    // Zone Summary and their charts all see one merged row.
+    r[organizationCol] = E.isBlank(r[organizationCol]) ? '' : E.sanitizeZone(String(r[organizationCol]).trim());
     r[stageCol] = E.isBlank(r[stageCol]) ? '' : String(r[stageCol]).trim();
     r.Stage_Clean = r[stageCol].toLowerCase().trim();
   });
@@ -99,7 +95,7 @@ window.Reports.s3d = async function s3d(wb) {
   );
 
   var ZONE_MAP = {
-    'Africa': 'AFR', 'APAC': 'APAC', 'Growth': 'GRO',
+    'Africa': 'AFR', 'APAC': 'APAC', 'GRO': 'GRO',
     'Europe': 'EUR', 'GHQ': 'GHQ', 'Middle America Zone': 'MAZ',
     'North America Zone': 'NAZ', 'South America Zone': 'SAZ',
   };
