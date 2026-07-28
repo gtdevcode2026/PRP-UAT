@@ -363,10 +363,39 @@ window.Reports.d2 = async function d2(wb) {
       ' and all ' + tagOnly + ' of them are counted. Check the column\'s format — a date stored as' +
       ' text in an unusual shape is the usual cause.');
   }
+  // Tags arrive as delimited lists ("GHQ 2022,SRM 2023"), so listing distinct
+  // CELLS buries the individual tags under dozens of unique combinations — a
+  // real export showed 59 distinct cells and truncated to "+51 more", hiding the
+  // only fact that mattered (whether any cyber tag exists at all). Split them
+  // the way the matcher does and count the tags themselves.
+  var individualTags = [];
+  rows.forEach(function (r) {
+    String(r.Tags).split(/[,;|\/\n]+/).forEach(function (t) {
+      t = t.trim();
+      if (t) individualTags.push(t);
+    });
+  });
+  // When nothing matched, say whether the file contains anything cyber-shaped.
+  // "no tag equals cyber" and "the word cyber appears nowhere" are different
+  // problems: the first is a naming mismatch, the second means this export
+  // simply is not the one this report was built for.
+  if (!tagOnly) {
+    var near = [];
+    individualTags.forEach(function (t) {
+      if (/cyber/i.test(t) && near.indexOf(t) === -1) near.push(t);
+    });
+    lines.push(near.length
+      ? '  ^ No tag is exactly "cyber", but these contain it: ' + near.join('  ·  ') +
+        '. If one of them is the one you want, say which and the rule can match it.'
+      : '  ^ The word "cyber" does not appear in any tag in this file. This export is not' +
+        ' tagged by risk category, so there is nothing for the Cyber filter to select —' +
+        ' the report needs a different column or a different filter value.');
+  }
   lines.push(
     '',
     'Values present in the file:',
-    '  Tags:         ' + distinct(rows.map(function (r) { return r.Tags; }), 8),
+    '  Tags:         ' + distinct(individualTags, 40) + '   (individual tags, split on , ; | /)',
+    '  Tag cells:    ' + distinct(rows.map(function (r) { return r.Tags; }), 6) + '   (as written)',
     '  Stage:        ' + distinct((keptRows ? filtered : rows).map(function (r) { return r.Stage; }), 8) +
       (keptRows ? '   (kept rows)' : '   (whole sheet — nothing passed the filter)'),
     '  Date created: ' + distinct(yearsSeen, 8) +
