@@ -266,7 +266,7 @@ body > * { position: relative; z-index: var(--z-base); }
 }
 .hero-title {
   font-size: clamp(24px, 3vw, 32px); font-weight: 700; color: var(--tx-hi);
-  line-height: 1.14; letter-spacing: -0.022em; text-wrap: balance; max-width: 22ch;
+  line-height: 1.14; letter-spacing: -0.022em; text-wrap: balance;
 }
 .hero-sub {
   margin-top: 11px; max-width: 68ch; font-size: var(--fs-lg);
@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-28.9';
+window.PRP_BUILD = '2026-07-28.10';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
