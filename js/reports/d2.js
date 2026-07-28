@@ -197,10 +197,26 @@ window.Reports.d2 = async function d2(wb) {
   // assessment instead, exactly as the date filter is dropped when no date
   // parses. This is announced everywhere it could mislead: the sheet's own
   // "Tags" filter cell says "all", and the run summary leads with it.
-  var tagFilterDropped = false;
+  //
+  // But before falling back to "everything", read what the tags DO encode. This
+  // export tags each row with its assessment cycle — "APAC 2026", "GHQ2026",
+  // "SAZ Re-assessment 2026" — so the tag column already names a population,
+  // just not a risk category. The cycle is the intended cohort and is NOT the
+  // same set as "Date created in that year": an assessment raised in December
+  // 2025 belongs to the 2026 cycle, and one created in 2026 may be closing out
+  // 2025 work. On the real file the two differ by 32 rows (45 vs 77), which is
+  // the whole gap between the expected figure and the published one.
+  var YEAR_TARGET = 2026;
+  var tagFilterDropped = false, tagCohort = false;
   if (!tagHits.length && rows.length) {
-    tagFilterDropped = true;
-    tagHits = rows.slice();
+    var cohort = rows.filter(function (r) { return String(r.Tags).indexOf(String(YEAR_TARGET)) !== -1; });
+    if (cohort.length) {
+      tagCohort = true;
+      tagHits = cohort;
+    } else {
+      tagFilterDropped = true;
+      tagHits = rows.slice();
+    }
   }
   var tagOnly = tagHits.length;
 
@@ -216,7 +232,6 @@ window.Reports.d2 = async function d2(wb) {
   // all, drop the date filter rather than the data. Every step says what it did,
   // and the year in use is written into the sheet's own filter cell so the
   // Dashboard never claims to be a 2026 report when it is not.
-  var YEAR_TARGET = 2026;
   var byYear = {};
   tagHits.forEach(function (r) {
     var y = yearOf(r);
@@ -224,7 +239,16 @@ window.Reports.d2 = async function d2(wb) {
   });
 
   var yearUsed = YEAR_TARGET, yearLoosened = false, dateFilterDropped = false;
-  var filtered = tagHits.filter(function (r) { return yearOf(r) === YEAR_TARGET; });
+  var filtered;
+  // When the cohort came from the tag year, that IS the period selection —
+  // intersecting it with "Date created in the same year" would apply the period
+  // twice and quietly discard the rows the cohort exists to include.
+  if (tagCohort) {
+    dateFilterDropped = true;
+    filtered = tagHits.slice();
+  } else {
+    filtered = tagHits.filter(function (r) { return yearOf(r) === YEAR_TARGET; });
+  }
   if (!filtered.length) {
     // Most-populated year wins; ties break to the later year so a rolling export
     // reports the current period rather than the one it is replacing.
@@ -247,17 +271,22 @@ window.Reports.d2 = async function d2(wb) {
 
   var TAG_RULE = tagFilterDropped
     ? 'none — no tag in this file is "cyber"   (DROPPED — every assessment is counted)'
-    : (tagLoosened
-      ? 'per tag after splitting on , ; | / and newlines   (LOOSENED — the script matches the whole cell)'
-      : 'whole cell = "cyber", case-insensitive   (the script\'s rule)');
+    : (tagCohort
+      ? 'tag contains "' + YEAR_TARGET + '"   (COHORT — no tag is "cyber", so the ' + YEAR_TARGET +
+        ' assessment cycle is used as the population)'
+      : (tagLoosened
+        ? 'per tag after splitting on , ; | / and newlines   (LOOSENED — the script matches the whole cell)'
+        : 'whole cell = "cyber", case-insensitive   (the script\'s rule)'));
   var STAGE_RULE = stageLoosened
     ? 'Completed / Under review, case-insensitive   (LOOSENED — the script is exact-case)'
     : 'exact case {Completed, Under review}   (the script\'s rule)';
-  var DATE_RULE = dateFilterDropped
+  var DATE_RULE = tagCohort
+    ? 'not applied — the tag cohort already selects the ' + YEAR_TARGET + ' period'
+    : (dateFilterDropped
     ? 'none — no Cyber row has a readable "Date created"   (DROPPED — the script keeps only 2026)'
     : (yearLoosened
       ? 'Date created in ' + yearUsed + '   (LOOSENED — the script hardcodes 2026, which matched nothing)'
-      : 'Date created in 2026   (the script\'s rule)');
+      : 'Date created in 2026   (the script\'s rule)'));
   // Both charts are titled "<year> Assessment"; a report that fell back to
   // another year must not still be captioned 2026.
   var chartYear = dateFilterDropped ? 'Undated' : String(yearUsed);
@@ -338,10 +367,12 @@ window.Reports.d2 = async function d2(wb) {
   var grid = [];
   // Both filter cells state what was actually applied, so the Dashboard cannot
   // claim to be a 2026 Cyber report while showing every assessment in the file.
-  setCell(grid, 1, 1, 'Tags'); setCell(grid, 1, 2, tagFilterDropped ? 'all' : 'Cyber');
+  setCell(grid, 1, 1, 'Tags'); setCell(grid, 1, 2,
+    tagFilterDropped ? 'all' : (tagCohort ? '*' + YEAR_TARGET + '*' : 'Cyber'));
   // The filter cell states the year actually applied, so the Dashboard cannot
   // claim to be a 2026 report when the rows behind it are not.
-  setCell(grid, 2, 1, 'Date created'); setCell(grid, 2, 2, dateFilterDropped ? 'all' : String(yearUsed));
+  setCell(grid, 2, 1, 'Date created'); setCell(grid, 2, 2,
+    tagCohort ? 'n/a' : (dateFilterDropped ? 'all' : String(yearUsed)));
 
   var startRow = 4;
   var pivotHeaderRow = ['Row Labels', 'Open', 'Closed', 'Grand Total'];
@@ -442,17 +473,22 @@ window.Reports.d2 = async function d2(wb) {
   var dropTagOnly = 0, dropDateOnly = 0, dropBoth = 0;
   var keptSamples = [], dropSamples = {};
   rows.forEach(function (r, i) {
-    var tagPass = tagFilterDropped || TAG_LOOSE(r.Tags);
+    // In cohort mode the tag test is cohort membership, not the cyber match —
+    // using TAG_LOOSE here counted every row as tag-rejected and the buckets
+    // stopped summing to rows read.
+    var tagPass = tagFilterDropped ? true
+      : (tagCohort ? String(r.Tags).indexOf(String(YEAR_TARGET)) !== -1 : TAG_LOOSE(r.Tags));
     var datePass = dateFilterDropped || yearOf(r) === yearUsed;
     var sawYear = yearOf(r);
     var dateWhy = 'date is ' + (sawYear === null ? 'unreadable' : sawYear) + ', not ' + yearUsed;
+    var tagWhy = tagCohort ? 'tag does not name the ' + YEAR_TARGET + ' cycle' : 'tag is not cyber';
     if (tagPass && datePass) {
       if (keptSamples.length < 3) keptSamples.push(sampleLine(r, i, ''));
       return;
     }
     var key;
-    if (!tagPass && !datePass) { dropBoth++; key = 'tag is not cyber, and ' + dateWhy; }
-    else if (!tagPass) { dropTagOnly++; key = 'tag is not cyber'; }
+    if (!tagPass && !datePass) { dropBoth++; key = tagWhy + ', and ' + dateWhy; }
+    else if (!tagPass) { dropTagOnly++; key = tagWhy; }
     else { dropDateOnly++; key = dateWhy; }
     if (!dropSamples[key]) dropSamples[key] = sampleLine(r, i, key);
   });
@@ -475,8 +511,10 @@ window.Reports.d2 = async function d2(wb) {
     while (s.length < RULE.length) s += '─';
     return s;
   }
-  var scope = (tagFilterDropped ? 'EVERY assessment' : 'Cyber assessments') +
-    (dateFilterDropped ? ', any date' : ' dated ' + yearUsed);
+  var scope = tagCohort
+    ? 'the ' + YEAR_TARGET + ' assessment cycle (by tag, not by Date created)'
+    : (tagFilterDropped ? 'EVERY assessment' : 'Cyber assessments') +
+      (dateFilterDropped ? ', any date' : ' dated ' + yearUsed);
 
   var lines = [
     'SUCCESS',
@@ -511,7 +549,12 @@ window.Reports.d2 = async function d2(wb) {
       (dateFilterDropped ? 'no date filter' : 'Date created year ' + yearUsed) + '):',
     '  Rows read:            ' + rows.length,
     '  Tags = Cyber:         ' + cyberHits + (tagFilterDropped ? '   <- filter dropped, all ' + tagOnly + ' rows used' : ''),
-    '  Date created in ' + yearUsed + ': ' + yearOnly,
+  );
+  if (tagCohort) {
+    lines.push('  ' + pad('Tags name ' + YEAR_TARGET + ':', 22) + tagOnly + '   <- used as the population instead');
+  }
+  lines.push(
+    '  Date created in ' + yearUsed + ': ' + yearOnly + (tagCohort ? '   (not used — see Date rule)' : ''),
     '  Kept (both):          ' + keptRows,
     '',
     'Rows dropped, by which rule rejected them:',
@@ -549,7 +592,7 @@ window.Reports.d2 = async function d2(wb) {
   // A number produced by anything other than the script's own rule is still
   // correct, but it is no longer a like-for-like reproduction of the reference
   // output — so it is flagged, not slipped through.
-  if (tagLoosened || stageLoosened || yearLoosened || dateFilterDropped || tagFilterDropped) {
+  if (tagLoosened || stageLoosened || yearLoosened || dateFilterDropped || tagFilterDropped || tagCohort) {
     warn.push('The script\'s exact rule matched nothing here, so a looser one was used' +
       ' (see the rules above). The numbers are real; they will not match a' +
       ' run of the Python script on this same file.');
@@ -560,7 +603,14 @@ window.Reports.d2 = async function d2(wb) {
       Object.keys(byYear).map(Number).sort().map(function (y) { return y + ' x' + byYear[y]; }).join('  ·  ') +
       '. The "Date created" filter cell on the sheet says ' + yearUsed + '.');
   }
-  if (dateFilterDropped) {
+  if (tagCohort) {
+    warn.push('No tag in this file is "cyber", but the tags DO name assessment cycles, so the ' +
+      YEAR_TARGET + ' cycle is the population: ' + tagOnly + ' row(s) whose tag contains "' + YEAR_TARGET +
+      '". This is NOT the same set as "Date created in ' + YEAR_TARGET + '" (' + yearOnly + ' rows) — a' +
+      ' cycle can hold work raised the previous year. See ALTERNATIVE POPULATIONS below for all three' +
+      ' readings and tell me which one Q2 should measure.');
+  }
+  if (dateFilterDropped && !tagCohort) {
     warn.push('Not one Cyber row has a readable "Date created", so the date filter was dropped' +
       ' and all ' + tagOnly + ' of them are counted. Check the column\'s format — a date stored as' +
       ' text in an unusual shape is the usual cause.');
@@ -605,6 +655,27 @@ window.Reports.d2 = async function d2(wb) {
   // One real row per outcome, with the reason attached. A count says a rule
   // rejected 1172 rows; this says what one of them looked like, which is the
   // difference between "the filter is wrong" and "the data is wrong".
+  // Three defensible readings of "the 2026 population" exist once the tag column
+  // stops being a risk category, and they give different percentages. Printing
+  // all three with their arithmetic means the right one can be picked by looking
+  // instead of by another round trip.
+  lines.push('', section('ALTERNATIVE POPULATIONS'));
+  lines.push('  The same file read three ways — confirm which one Q2 should measure:');
+  var byTagYear = rows.filter(function (r) { return String(r.Tags).indexOf(String(YEAR_TARGET)) !== -1; });
+  var byDateYear = rows.filter(function (r) { return yearOf(r) === YEAR_TARGET; });
+  var both = byTagYear.filter(function (r) { return yearOf(r) === YEAR_TARGET; });
+  [
+    ['tag contains "' + YEAR_TARGET + '"', byTagYear, tagCohort],
+    ['Date created in ' + YEAR_TARGET, byDateYear, !tagCohort && !dateFilterDropped],
+    ['both of the above', both, false],
+  ].forEach(function (opt) {
+    var set = opt[1];
+    var cl = set.filter(function (r) { return STAGE_LOOSE(r.Stage); }).length;
+    var pct = set.length ? Math.round(pyRound2(cl / set.length) * 100) : 0;
+    lines.push('  ' + pad(opt[0], 26) + pad(set.length + ' rows', 12) +
+      pad('closed ' + cl, 13) + '-> ' + pad(pct + '%', 6) + (opt[2] ? '   <- CHOSEN' : ''));
+  });
+
   lines.push('', section('SAMPLE ROWS'));
   if (keptSamples.length) {
     lines.push('  kept:');
