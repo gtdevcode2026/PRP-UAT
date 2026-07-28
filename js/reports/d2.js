@@ -113,6 +113,20 @@ window.Reports.d2 = async function d2(wb) {
   // otherwise keep half its closed rows and publish a quietly wrong figure.
   var tagHits = rows.filter(function (r) { return TAG_LOOSE(r.Tags); });
   var tagLoosened = tagHits.some(function (r) { return !TAG_STRICT(r.Tags); });
+  var cyberHits = tagHits.length;          // the honest "Tags = Cyber" count
+
+  // A real export tags by zone and year ("MAZ 2024", "GHQ 2022,SRM 2023") and
+  // carries no risk-category tag at all. The Cyber filter then selects nothing
+  // and the whole report is 0% — a filter that matches none of 1249 rows is not
+  // narrowing the population, it is deleting it. Drop it and measure every
+  // assessment instead, exactly as the date filter is dropped when no date
+  // parses. This is announced everywhere it could mislead: the sheet's own
+  // "Tags" filter cell says "all", and the run summary leads with it.
+  var tagFilterDropped = false;
+  if (!tagHits.length && rows.length) {
+    tagFilterDropped = true;
+    tagHits = rows.slice();
+  }
   var tagOnly = tagHits.length;
 
   // ── The year, same tolerant-but-announced treatment ──
@@ -156,9 +170,11 @@ window.Reports.d2 = async function d2(wb) {
   var stageLoosened = filtered.some(function (r) { return STAGE_LOOSE(r.Stage) && !STAGE_STRICT(r.Stage); });
   filtered.forEach(function (r) { r['Final Stage'] = STAGE_LOOSE(r.Stage) ? 'Closed' : 'Open'; });
 
-  var TAG_RULE = tagLoosened
-    ? 'per tag after splitting on , ; | / and newlines   (LOOSENED — the script matches the whole cell)'
-    : 'whole cell = "cyber", case-insensitive   (the script\'s rule)';
+  var TAG_RULE = tagFilterDropped
+    ? 'none — no tag in this file is "cyber"   (DROPPED — every assessment is counted)'
+    : (tagLoosened
+      ? 'per tag after splitting on , ; | / and newlines   (LOOSENED — the script matches the whole cell)'
+      : 'whole cell = "cyber", case-insensitive   (the script\'s rule)');
   var STAGE_RULE = stageLoosened
     ? 'Completed / Under review, case-insensitive   (LOOSENED — the script is exact-case)'
     : 'exact case {Completed, Under review}   (the script\'s rule)';
@@ -245,7 +261,9 @@ window.Reports.d2 = async function d2(wb) {
   }
 
   var grid = [];
-  setCell(grid, 1, 1, 'Tags'); setCell(grid, 1, 2, 'Cyber');
+  // Both filter cells state what was actually applied, so the Dashboard cannot
+  // claim to be a 2026 Cyber report while showing every assessment in the file.
+  setCell(grid, 1, 1, 'Tags'); setCell(grid, 1, 2, tagFilterDropped ? 'all' : 'Cyber');
   // The filter cell states the year actually applied, so the Dashboard cannot
   // claim to be a 2026 report when the rows behind it are not.
   setCell(grid, 2, 1, 'Date created'); setCell(grid, 2, 2, dateFilterDropped ? 'all' : String(yearUsed));
@@ -283,17 +301,21 @@ window.Reports.d2 = async function d2(wb) {
   // Dashboard sheet is a literal reproduction of the openpyxl output — stdout
   // has no counterpart in the script and cannot change the workbook. The shell
   // renders it in the "Script log" panel; s4 already returns stdout the same way.
-  function distinct(values, limit) {
+  // No truncation. "+53 more" is exactly where the answer hides — the value that
+  // explained a 0% has been in that tail twice now. Every distinct value is
+  // listed, most frequent first, wrapped at `indent` so a 60-value column stays
+  // readable instead of running off as one line.
+  function distinct(values) {
     var seen = [], counts = {};
     values.forEach(function (v) {
       var k = v === '' ? '(blank)' : String(v);
       if (!counts[k]) { counts[k] = 0; seen.push(k); }
       counts[k]++;
     });
+    if (!seen.length) return '(none)';
     seen.sort(function (a, b) { return counts[b] - counts[a]; });
-    var shown = seen.slice(0, limit).map(function (k) { return k + ' x' + counts[k]; });
-    if (seen.length > limit) shown.push('+' + (seen.length - limit) + ' more');
-    return shown.join('  ·  ') || '(none)';
+    return seen.map(function (k) { return k + ' x' + counts[k]; }).join('  ·  ') +
+      '   (' + seen.length + ' distinct)';
   }
 
   var unparsedDates = 0;
@@ -303,7 +325,7 @@ window.Reports.d2 = async function d2(wb) {
     return String(y);
   });
 
-  var q2Reason = !tagOnly ? 'no row carries a Cyber tag — the 0% is not a measurement'
+  var q2Reason = !tagOnly ? 'the sheet has no data rows — the 0% is not a measurement'
     : (!keptRows ? 'Cyber rows exist but none survived the date filter — the 0% is not a measurement'
     : (!recordTotal ? keptRows + ' row(s) passed the filter but every ID is blank, so the pivot counted nothing — the 0% is not a measurement'
     : (!closedTotal ? 'rows passed the filter, none are at a Closed stage' : '')));
@@ -323,9 +345,10 @@ window.Reports.d2 = async function d2(wb) {
     'Stage rule: ' + STAGE_RULE,
     'Date rule:  ' + DATE_RULE,
     '',
-    'Filter (Tags, and ' + (dateFilterDropped ? 'no date filter' : 'Date created year ' + yearUsed) + '):',
+    'Filter (' + (tagFilterDropped ? 'no tag filter' : 'Tags') + ', and ' +
+      (dateFilterDropped ? 'no date filter' : 'Date created year ' + yearUsed) + '):',
     '  Rows read:            ' + rows.length,
-    '  Tags = Cyber:         ' + tagOnly,
+    '  Tags = Cyber:         ' + cyberHits + (tagFilterDropped ? '   <- filter dropped, all ' + tagOnly + ' rows used' : ''),
     '  Date created in ' + yearUsed + ': ' + yearOnly,
     '  Kept (both):          ' + keptRows,
     '',
@@ -347,7 +370,7 @@ window.Reports.d2 = async function d2(wb) {
   // correct, but it is no longer a like-for-like reproduction of the reference
   // output — so it is flagged, not slipped through. The "  ^ " prefix is what
   // makes the shell open the Script log by itself.
-  if (tagLoosened || stageLoosened || yearLoosened || dateFilterDropped) {
+  if (tagLoosened || stageLoosened || yearLoosened || dateFilterDropped || tagFilterDropped) {
     lines.push('  ^ The script\'s exact rule matched nothing here, so a looser one was used' +
       ' (see the rules above). The numbers are real; they will not match a' +
       ' run of the Python script on this same file.');
@@ -379,26 +402,31 @@ window.Reports.d2 = async function d2(wb) {
   // "no tag equals cyber" and "the word cyber appears nowhere" are different
   // problems: the first is a naming mismatch, the second means this export
   // simply is not the one this report was built for.
-  if (!tagOnly) {
+  if (tagFilterDropped) {
     var near = [];
     individualTags.forEach(function (t) {
       if (/cyber/i.test(t) && near.indexOf(t) === -1) near.push(t);
     });
+    // The scope warning goes on BOTH branches. A near miss is the likelier case
+    // and the more dangerous one — "Cyber Security" existing makes the number
+    // look Cyber-shaped when it is not.
+    lines.push('  ^ No tag in this file is "cyber", so the tag filter was dropped and all ' +
+      tagOnly + ' rows are counted. THIS FIGURE COVERS EVERY ASSESSMENT, NOT JUST CYBER ONES.');
     lines.push(near.length
-      ? '  ^ No tag is exactly "cyber", but these contain it: ' + near.join('  ·  ') +
-        '. If one of them is the one you want, say which and the rule can match it.'
-      : '  ^ The word "cyber" does not appear in any tag in this file. This export is not' +
-        ' tagged by risk category, so there is nothing for the Cyber filter to select —' +
-        ' the report needs a different column or a different filter value.');
+      ? '  ^ These tags DO contain the word: ' + near.join('  ·  ') +
+        '. If one of them is the population you want, say which and it becomes the filter.'
+      : '  ^ The word "cyber" appears in no tag at all. This export is tagged by zone and year' +
+        ' rather than by risk category, so tell me which column carries the Cyber/non-Cyber' +
+        ' split and the filter can point at it.');
   }
   lines.push(
     '',
     'Values present in the file:',
-    '  Tags:         ' + distinct(individualTags, 40) + '   (individual tags, split on , ; | /)',
-    '  Tag cells:    ' + distinct(rows.map(function (r) { return r.Tags; }), 6) + '   (as written)',
-    '  Stage:        ' + distinct((keptRows ? filtered : rows).map(function (r) { return r.Stage; }), 8) +
+    '  Tags:         ' + distinct(individualTags) + '   (individual tags, split on , ; | /)',
+    '  Tag cells:    ' + distinct(rows.map(function (r) { return r.Tags; })) + '   (as written)',
+    '  Stage:        ' + distinct((keptRows ? filtered : rows).map(function (r) { return r.Stage; })) +
       (keptRows ? '   (kept rows)' : '   (whole sheet — nothing passed the filter)'),
-    '  Date created: ' + distinct(yearsSeen, 8) +
+    '  Date created: ' + distinct(yearsSeen) +
       (unparsedDates ? '   — ' + unparsedDates + ' cell(s) could not be read as a date' : '')
   );
   var stdout = lines.join('\n');
