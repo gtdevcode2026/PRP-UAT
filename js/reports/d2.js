@@ -851,6 +851,56 @@ window.Reports.d2 = async function d2(wb) {
       ' this file has ' + rows.length + ' rows and ' + strictTotal +
       ' of them are tagged "cyber" and dated 2026.');
 
+  // Everything above scores columns INSIDE the chosen population. If the wanted
+  // rows/closed pair is not in there, the population itself is wrong — and it may
+  // be defined by a column this report never selects on. A file carrying manual
+  // working columns ("Working1" = Pending / Completed in 2026) is someone else's
+  // scope marker for this very KPI. So enumerate, over the WHOLE file, every
+  // column value that selects a subset, with the closed count inside it. If the
+  // file can produce a given rows/closed pair at all, it is in this table.
+  lines.push('', section('POPULATION CANDIDATES (whole file)'));
+  lines.push('  Every column value that could define the population, and the closed count inside it.');
+  lines.push('  ' + pad('col', 5) + pad('header', 20) + pad('value', 26) + pad('rows', 7) + pad('closed', 8) + '-> Q2');
+  function q2Of(sel) {
+    var cl = sel.filter(function (r) { return STAGE_LOOSE(r.Stage); }).length;
+    return { rows: sel.length, closed: cl, pct: sel.length ? Math.round(pyRound2(cl / sel.length) * 100) : 0 };
+  }
+  function candLine(col, header, label, sel) {
+    var s = q2Of(sel);
+    lines.push('  ' + pad(col, 5) + pad(header, 20) + pad(label, 26) +
+      pad(String(s.rows), 7) + pad(String(s.closed), 8) + '-> ' + s.pct + '%');
+  }
+  // Tag year cohorts first — the population this report actually selects on.
+  var tagYears = [];
+  individualTags.forEach(function (t) {
+    var m = String(t).match(/(20\d\d)/);
+    if (m && tagYears.indexOf(m[1]) === -1) tagYears.push(m[1]);
+  });
+  tagYears.sort().forEach(function (y) {
+    candLine(colLetter(rawHeaders.indexOf(resolved.Tags)), resolved.Tags, 'contains "' + y + '"',
+      rows.filter(function (r) { return String(r.Tags).indexOf(y) !== -1; }));
+  });
+  rawHeaders.forEach(function (h, i) {
+    if (!h || h === resolved.Tags) return;
+    var counts = {}, order = [];
+    rows.forEach(function (r) {
+      var v = r[h];
+      if (!isFilled(v)) return;
+      var k = showCellVal(v);
+      if (!counts[k]) { counts[k] = 0; order.push(k); }
+      counts[k]++;
+    });
+    if (!order.length || order.length > 12) return;   // not a category column
+    order.sort(function (a, b) { return counts[b] - counts[a]; });
+    order.forEach(function (k) {
+      candLine(colLetter(i), h, k, rows.filter(function (r) {
+        return isFilled(r[h]) && showCellVal(r[h]) === k;
+      }));
+    });
+  });
+  lines.push('  Closed here is always the Stage rule. Find the rows/closed pair you expect,' +
+    ' name that column and value, and it becomes the population.');
+
   lines.push('', section('SAMPLE ROWS'));
   if (keptSamples.length) {
     lines.push('  kept:');
