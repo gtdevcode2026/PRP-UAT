@@ -2821,9 +2821,68 @@ window.Reports.d2 = async function d2(wb) {
     lines.push('  ' + pad(rd[0], 40) + pad('closed ' + n, 13) + '-> ' + pad(pct + '%', 6) + (rd[2] ? '   <- CHOSEN' : ''));
   });
   if (!closedDateCol) {
-    lines.push('  No "Date closed"-style column found. If closure is recorded in one of the' +
-      ' unused columns listed above, name it and it becomes the rule.');
+    lines.push('  No "Date closed"-style column found by name — see CLOSURE CANDIDATES below,' +
+      ' which tests every column regardless of what it is called.');
   }
+
+  // Naming the closure column by guessing its header only works if the guess is
+  // right. Score EVERY column instead: over the chosen population, how many rows
+  // have that cell filled, and what Q2 that would produce. The column that
+  // matches the expected closed count is then visible rather than hypothesised.
+  // A column that is empty for every row, or filled for every row, cannot define
+  // a split — those are marked so the eye skips them.
+  lines.push('', section('CLOSURE CANDIDATES'));
+  lines.push('  Every column scored as "closed = this cell is filled", over the same ' +
+    filtered.length + ' rows.');
+  lines.push('  Only a column filled for SOME rows can define a Closed/Open split; those are marked *.');
+  lines.push('  ' + pad('col', 5) + pad('header', 22) + pad('filled', 9) + pad('-> Q2', 9) + 'values');
+  function isFilled(v) { return !(v === null || v === undefined || String(v).trim() === ''); }
+  // A date cell arrives as a serial; printing 46174.229 helps nobody. Only treat
+  // a number as a date when it decodes to a plausible year, so an ID like 19580
+  // (which would decode to 1953) is left alone.
+  function showCellVal(v) {
+    if (v instanceof Date) return showDate(v);
+    if (typeof v === 'number') {
+      var d = E.excelDateInfo(v);
+      if (d && d.year >= 2000 && d.year <= 2100) return showDate(v);
+    }
+    return String(v).trim();
+  }
+  rawHeaders.forEach(function (h, i) {
+    if (!h) return;
+    var vals = filtered.map(function (r) { return r[h]; });
+    var filled = vals.filter(isFilled).length;
+    var pct = recordTotal ? Math.round(pyRound2(filled / recordTotal) * 100) : 0;
+
+    // Few distinct values means a category column: list them, because closure may
+    // be one particular value rather than the cell merely being filled.
+    var counts = {}, order = [];
+    vals.forEach(function (v) {
+      if (!isFilled(v)) return;
+      var k = showCellVal(v);
+      if (!counts[k]) { counts[k] = 0; order.push(k); }
+      counts[k]++;
+    });
+    order.sort(function (a, b) { return counts[b] - counts[a]; });
+    var shown = order.length <= 8
+      ? order.map(function (k) { return k + ' x' + counts[k] +
+          (counts[k] > 0 && counts[k] < filtered.length ? ' (' + Math.round(pyRound2(counts[k] / (recordTotal || 1)) * 100) + '%)' : ''); }).join('  ·  ')
+      : '(' + order.length + ' distinct — too many to be a status column)';
+
+    // A column filled for every row can still define the split through ONE of
+    // its values — a workflow_state of Resolved/Active is exactly that shape, and
+    // scoring only "is the cell filled" would have skipped right past it.
+    var splitsByFill = filled > 0 && filled < filtered.length;
+    // Only a category-shaped column can split by value. Without the arity guard
+    // an ID column marks itself — 45 distinct values, each count 1, every one of
+    // them technically "a subset".
+    var splitsByValue = order.length > 1 && order.length <= 8;
+    lines.push('  ' + (splitsByFill || splitsByValue ? '*' : ' ') + pad(colLetter(i), 4) + pad(h, 22) +
+      pad(String(filled), 9) + pad('-> ' + pct + '%', 9) + shown);
+  });
+  lines.push('  Read down the "filled" column for the closed count you expect. If it is a' +
+    ' particular VALUE rather than the cell being filled, the values are listed beside each' +
+    ' column — name the column and value and it becomes the rule.');
 
   lines.push('', section('SAMPLE ROWS'));
   if (keptSamples.length) {
