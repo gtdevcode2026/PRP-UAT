@@ -537,6 +537,17 @@ window.Reports.d2 = async function d2(wb) {
     section('COLUMNS USED')
   );
   columnMap.forEach(function (l) { lines.push(l); });
+  // The unmapped columns matter as much as the mapped ones: when a count comes
+  // out wrong, the answer is usually in a column this report never looks at, and
+  // not listing them cost a round trip.
+  var usedHeaders = CANON.map(function (c) { return resolved[c]; });
+  var otherCols = [];
+  rawHeaders.forEach(function (h, i) {
+    if (h && usedHeaders.indexOf(h) === -1) otherCols.push(colLetter(i) + ' "' + h + '"');
+  });
+  if (otherCols.length) {
+    lines.push('  ' + pad('not used', 16) + otherCols.join('  ·  '));
+  }
   lines.push(
     '',
     section('RULES APPLIED'),
@@ -675,6 +686,40 @@ window.Reports.d2 = async function d2(wb) {
     lines.push('  ' + pad(opt[0], 26) + pad(set.length + ' rows', 12) +
       pad('closed ' + cl, 13) + '-> ' + pad(pct + '%', 6) + (opt[2] ? '   <- CHOSEN' : ''));
   });
+
+  // Same idea one level down: once the population is settled, "Closed" is the
+  // remaining free variable. On the real file no subset of the Stage values can
+  // produce the expected closed count, which means closure is recorded
+  // somewhere other than Stage — so every plausible reading is counted here
+  // rather than guessed at one per round trip.
+  lines.push('', section('CLOSURE READINGS'));
+  lines.push('  "Closed" counted several ways over the same ' + filtered.length + ' rows:');
+  var closedDateCol = null;
+  ['Date closed', 'date_closed', 'closed_date', 'Date Closed', 'completion_date', 'date_completed', 'closed_on']
+    .forEach(function (a) {
+      if (closedDateCol) return;
+      var i = headerIndex(a);
+      if (i !== -1) closedDateCol = rawHeaders[i];
+    });
+  var readings = [
+    ['Stage is Completed or Under review', function (r) { return STAGE_LOOSE(r.Stage); }, true],
+    ['Stage is Completed only', function (r) { return /^completed$/i.test(String(r.Stage).trim()); }, false],
+  ];
+  if (closedDateCol) {
+    readings.push(['"' + closedDateCol + '" is filled', function (r) { return !blankCell(r[closedDateCol]) && String(r[closedDateCol]).trim() !== ''; }, false]);
+    readings.push(['Stage closed OR "' + closedDateCol + '" filled', function (r) {
+      return STAGE_LOOSE(r.Stage) || (!blankCell(r[closedDateCol]) && String(r[closedDateCol]).trim() !== '');
+    }, false]);
+  }
+  readings.forEach(function (rd) {
+    var n = filtered.filter(rd[1]).length;
+    var pct = recordTotal ? Math.round(pyRound2(n / recordTotal) * 100) : 0;
+    lines.push('  ' + pad(rd[0], 40) + pad('closed ' + n, 13) + '-> ' + pad(pct + '%', 6) + (rd[2] ? '   <- CHOSEN' : ''));
+  });
+  if (!closedDateCol) {
+    lines.push('  No "Date closed"-style column found. If closure is recorded in one of the' +
+      ' unused columns listed above, name it and it becomes the rule.');
+  }
 
   lines.push('', section('SAMPLE ROWS'));
   if (keptSamples.length) {
