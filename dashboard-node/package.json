@@ -1,0 +1,13 @@
+{
+  "name": "prp-dashboard-d2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vanilla Node.js port of Automation 2.py — OneTrust TPRM assessment dashboard (D2)",
+  "scripts": {
+    "start": "node dashboard.js"
+  },
+  "dependencies": {
+    "canvas": "^3.1.0",
+    "exceljs": "^4.4.0"
+  }
+}
