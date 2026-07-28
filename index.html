@@ -2155,12 +2155,87 @@ window.Reports.d2 = async function d2(wb) {
     });
     return out;
   });
+  // ── Column resolution ────────────────────────────────────────────────────
+  //
+  // The reference workbook uses ID / Organization / Stage / Date created / Tags.
+  // A real supplier-assessment export of the same data uses snake_case and
+  // different words for the same things (assessment_status for Stage,
+  // request_date for Date created, zone_assessing for Organization), so the
+  // report threw "Missing required columns" on a file it could otherwise read
+  // perfectly. Each field therefore accepts a small list of known synonyms.
+  //
+  // The canonical name always wins, so a workbook shaped like the reference one
+  // resolves exactly as before and parity is untouched. Which header was
+  // actually used is printed in COLUMNS USED — a silent alias would be worse
+  // than the error it replaces.
+  var ALIASES = {
+    'ID': ['ID', 'id', 'code', 'assessment_id'],
+    'Organization': ['Organization', 'Organisation', 'zone_assessing', 'supplier_zone', 'zone'],
+    'Stage': ['Stage', 'assessment_status', 'status'],
+    'Date created': ['Date created', 'request_date', 'date_created', 'created_date', 'created'],
+    // Tags is the risk-category dimension. In this export the category lives in
+    // one of several *_category columns and only one of them holds "cyber", so
+    // the choice is made by looking rather than by guessing — see below.
+    'Tags': ['Tags', 'main_category', 'category', 'gpo_category', 'fin_category'],
+  };
+  var CANON = Object.keys(ALIASES);
+
+  function headerIndex(name) {
+    for (var i = 0; i < rawHeaders.length; i++) {
+      if (rawHeaders[i].toLowerCase() === String(name).toLowerCase()) return i;
+    }
+    return -1;
+  }
+  // Every alias that is actually present, canonical first.
+  function candidates(canon) {
+    var out = [];
+    ALIASES[canon].forEach(function (a) {
+      var i = headerIndex(a);
+      if (i !== -1 && out.indexOf(rawHeaders[i]) === -1) out.push(rawHeaders[i]);
+    });
+    return out;
+  }
+
+  var resolved = {}, resolvedHow = {};
+  CANON.forEach(function (canon) {
+    var cands = candidates(canon);
+    if (!cands.length) return;
+    var pick = cands[0];
+    var how = pick === canon ? '' : 'matched by alias';
+    // For the category column, prefer whichever candidate actually contains a
+    // cyber value. Picking the first present one would silently measure
+    // main_category when the split lives in category, and the two disagree.
+    if (canon === 'Tags' && cands.length > 1) {
+      var withCyber = cands.filter(function (h) {
+        return sheet.rows.some(function (row) { return /cyber/i.test(String(row[h] === undefined ? '' : row[h])); });
+      });
+      if (withCyber.length) {
+        pick = withCyber[0];
+        how = (pick === canon ? '' : 'matched by alias; ') + 'chosen over ' +
+          cands.filter(function (h) { return h !== pick; }).join(', ') + ' because it contains a "cyber" value';
+      } else {
+        how = (pick === canon ? '' : 'matched by alias; ') + 'no candidate contains "cyber" (also looked at ' +
+          cands.filter(function (h) { return h !== pick; }).join(', ') + ')';
+      }
+    }
+    resolved[canon] = pick;
+    resolvedHow[canon] = how;
+  });
+
   // Report every missing column at once — naming them one run at a time turns
   // a single malformed export into five round trips.
-  var missing = ['ID', 'Organization', 'Stage', 'Date created', 'Tags'].filter(function (c) {
-    return rawHeaders.indexOf(c) === -1;
+  var missing = CANON.filter(function (c) { return !resolved[c]; });
+  if (missing.length) {
+    throw new Error('Missing required columns: ' + missing.map(function (c) {
+      return c + ' (also accepts ' + ALIASES[c].slice(1).join(', ') + ')';
+    }).join('; ') + '.  Headers found: ' + rawHeaders.join(', '));
+  }
+  // Re-key each row under the canonical names the rest of the report uses.
+  rows.forEach(function (r) {
+    CANON.forEach(function (canon) {
+      if (resolved[canon] !== canon) r[canon] = r[resolved[canon]];
+    });
   });
-  if (missing.length) throw new Error('Missing required columns: ' + missing.join(', '));
 
   // df[c] = df[c].fillna("").astype(str).str.strip()
   //
@@ -2486,12 +2561,16 @@ window.Reports.d2 = async function d2(wb) {
     if (!dropSamples[key]) dropSamples[key] = sampleLine(r, i, key);
   });
 
-  var REQUIRED = ['ID', 'Organization', 'Stage', 'Date created', 'Tags'];
-  var columnMap = REQUIRED.map(function (name) {
+  var columnMap = CANON.map(function (name) {
+    var actual = resolved[name];
     var at = [];
-    rawHeaders.forEach(function (h, i) { if (h === name) at.push('col ' + colLetter(i)); });
-    return '  ' + pad(name, 16) + at.join(' + ') +
-      (at.length > 1 ? '   (' + at.length + ' columns share this header — first non-blank per row is used)' : '');
+    rawHeaders.forEach(function (h, i) { if (h === actual) at.push('col ' + colLetter(i)); });
+    var notes = [];
+    if (at.length > 1) notes.push(at.length + ' columns share this header — first non-blank per row is used');
+    if (resolvedHow[name]) notes.push(resolvedHow[name]);
+    return '  ' + pad(name, 16) + pad(at.join(' + '), 16) +
+      (actual === name ? '' : '"' + actual + '"') +
+      (notes.length ? '   (' + notes.join('; ') + ')' : '');
   });
 
   var RULE = '─────────────────────────────────────────────────────────────────';
