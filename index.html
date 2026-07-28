@@ -2433,22 +2433,105 @@ window.Reports.d2 = async function d2(wb) {
     : (!keptRows ? 'Cyber rows exist but none survived the date filter — the 0% is not a measurement'
     : (!recordTotal ? keptRows + ' row(s) passed the filter but every ID is blank, so the pivot counted nothing — the 0% is not a measurement'
     : (!closedTotal ? 'rows passed the filter, none are at a Closed stage' : '')));
+  // ── Debugging aids: where each column came from, and why rows were dropped ──
+  //
+  // The funnel says HOW MANY rows each rule rejected. What it never said is
+  // WHICH rule rejected a given row, or what that row actually looked like —
+  // so a wrong answer still meant asking the user to open the workbook. The
+  // column map catches a misnamed or duplicated header, the drop tally splits
+  // the rejections into mutually exclusive buckets, and the sample rows show
+  // one real example of each outcome with the reason attached.
+  function pad(s, n) {
+    s = String(s);
+    while (s.length < n) s += ' ';
+    return s;
+  }
+  function colLetter(i) {
+    var s = '', n = i + 1;
+    while (n > 0) { var rem = (n - 1) % 26; s = String.fromCharCode(65 + rem) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+  function showDate(v) {
+    var d = E.excelDateInfo(v);
+    if (d) return d.year + '-' + ('0' + d.month).slice(-2) + '-' + ('0' + d.day).slice(-2);
+    var s = String(v === null || v === undefined ? '' : v).trim();
+    return s ? s.slice(0, 18) + ' (unreadable)' : '(blank)';
+  }
+  function blankish(v) {
+    return (v === null || v === undefined || String(v).trim() === '') ? '(blank)' : String(v);
+  }
+  // Row number as the user sees it in Excel: +2 for the header row and 1-basing.
+  function sampleLine(r, i, why) {
+    return '    row ' + pad(i + 2, 6) + pad('ID ' + blankish(r.ID), 12) +
+      pad(blankish(r.Organization), 20) + pad(blankish(r.Stage), 14) +
+      pad(showDate(r['Date created']), 14) + 'Tags ' + JSON.stringify(String(r.Tags)) +
+      (why ? '   <- ' + why : '');
+  }
+
+  var dropTagOnly = 0, dropDateOnly = 0, dropBoth = 0;
+  var keptSamples = [], dropSamples = {};
+  rows.forEach(function (r, i) {
+    var tagPass = tagFilterDropped || TAG_LOOSE(r.Tags);
+    var datePass = dateFilterDropped || yearOf(r) === yearUsed;
+    var sawYear = yearOf(r);
+    var dateWhy = 'date is ' + (sawYear === null ? 'unreadable' : sawYear) + ', not ' + yearUsed;
+    if (tagPass && datePass) {
+      if (keptSamples.length < 3) keptSamples.push(sampleLine(r, i, ''));
+      return;
+    }
+    var key;
+    if (!tagPass && !datePass) { dropBoth++; key = 'tag is not cyber, and ' + dateWhy; }
+    else if (!tagPass) { dropTagOnly++; key = 'tag is not cyber'; }
+    else { dropDateOnly++; key = dateWhy; }
+    if (!dropSamples[key]) dropSamples[key] = sampleLine(r, i, key);
+  });
+
+  var REQUIRED = ['ID', 'Organization', 'Stage', 'Date created', 'Tags'];
+  var columnMap = REQUIRED.map(function (name) {
+    var at = [];
+    rawHeaders.forEach(function (h, i) { if (h === name) at.push('col ' + colLetter(i)); });
+    return '  ' + pad(name, 16) + at.join(' + ') +
+      (at.length > 1 ? '   (' + at.length + ' columns share this header — first non-blank per row is used)' : '');
+  });
+
+  var RULE = '─────────────────────────────────────────────────────────────────';
+  function section(title) {
+    var s = '── ' + title + ' ';
+    while (s.length < RULE.length) s += '─';
+    return s;
+  }
+  var scope = (tagFilterDropped ? 'EVERY assessment' : 'Cyber assessments') +
+    (dateFilterDropped ? ', any date' : ' dated ' + yearUsed);
+
   var lines = [
     'SUCCESS',
     'output file D2.xlsx',
     '',
+    RULE,
+    ' RESULT   ' + "Q2 '26 = " + Math.round(q2_26 * 100) + '%' +
+      '   (Closed ' + closedTotal + ' / Grand Total ' + recordTotal + ')',
+    ' SCOPE    ' + scope,
+    RULE,
+    '',
     'Input file: ' + ((wb && wb.__fileName) || 'workbook.xlsx'),
-    'Sheet: OneTrust Assessment',
+    'Sheet: OneTrust Assessment   ·   ' + rows.length + ' data rows   ·   ' + rawHeaders.length + ' columns',
   ];
   if (dupHeaders.length) {
     lines.push('Duplicate columns: ' + dupHeaders.join(', ') + '   (first non-blank value per row is used)');
   }
   lines.push(
     '',
+    section('COLUMNS USED')
+  );
+  columnMap.forEach(function (l) { lines.push(l); });
+  lines.push(
+    '',
+    section('RULES APPLIED'),
     'Tags rule:  ' + TAG_RULE,
     'Stage rule: ' + STAGE_RULE,
     'Date rule:  ' + DATE_RULE,
     '',
+    section('FUNNEL'),
     'Filter (' + (tagFilterDropped ? 'no tag filter' : 'Tags') + ', and ' +
       (dateFilterDropped ? 'no date filter' : 'Date created year ' + yearUsed) + '):',
     '  Rows read:            ' + rows.length,
@@ -2456,37 +2539,54 @@ window.Reports.d2 = async function d2(wb) {
     '  Date created in ' + yearUsed + ': ' + yearOnly,
     '  Kept (both):          ' + keptRows,
     '',
+    'Rows dropped, by which rule rejected them:',
+    '  tag rule only:        ' + dropTagOnly + (tagFilterDropped ? '   (tag rule was not applied)' : ''),
+    '  date rule only:       ' + dropDateOnly + (dateFilterDropped ? '   (date rule was not applied)' : ''),
+    '  both rules:           ' + dropBoth,
+    '',
     'Stage of the kept rows:',
     '  Closed: ' + closedTotal,
     '  Open:   ' + totalOpen,
     '',
-    "Q2 '26 = Closed / Grand Total = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%'
+    section('PIVOT')
   );
+  pivotDisplay.forEach(function (r) {
+    lines.push('  ' + pad(r.label, 16) + 'open ' + pad(r.open, 6) + 'closed ' + pad(r.closed, 6) + 'total ' + r.grandTotal);
+  });
+  lines.push(
+    '',
+    "Q2 '26 = Closed / Grand Total = " + closedTotal + ' / ' + recordTotal + ' = ' + Math.round(q2_26 * 100) + '%',
+    ''
+  );
+  // Warnings are collected rather than pushed inline so they sit together under
+  // one heading — scattered through the log they read as commentary, in a block
+  // they read as a checklist. The "  ^ " prefix is what makes the shell open the
+  // Script log by itself, so it stays on every one of them.
+  var warn = [];
   // The pivot counts IDs, so a blank ID drops a row from the Grand Total while
   // it still passed the filter. Say so, otherwise the two numbers above look
   // like an arithmetic error.
   if (keptRows !== recordTotal) {
-    lines.push('  ^ ' + (keptRows - recordTotal) + ' kept row(s) have a blank ID and are not counted in the' +
+    warn.push((keptRows - recordTotal) + ' kept row(s) have a blank ID and are not counted in the' +
       ' Grand Total (the pivot counts IDs, not rows).');
   }
-  if (q2Reason) lines.push('  ^ ' + q2Reason);
+  if (q2Reason) warn.push(q2Reason);
   // A number produced by anything other than the script's own rule is still
   // correct, but it is no longer a like-for-like reproduction of the reference
-  // output — so it is flagged, not slipped through. The "  ^ " prefix is what
-  // makes the shell open the Script log by itself.
+  // output — so it is flagged, not slipped through.
   if (tagLoosened || stageLoosened || yearLoosened || dateFilterDropped || tagFilterDropped) {
-    lines.push('  ^ The script\'s exact rule matched nothing here, so a looser one was used' +
+    warn.push('The script\'s exact rule matched nothing here, so a looser one was used' +
       ' (see the rules above). The numbers are real; they will not match a' +
       ' run of the Python script on this same file.');
   }
   if (yearLoosened) {
-    lines.push('  ^ No Cyber row is dated 2026, so this report covers ' + yearUsed + ' instead.' +
+    warn.push('No Cyber row is dated 2026, so this report covers ' + yearUsed + ' instead.' +
       ' Years present on the Cyber rows: ' +
       Object.keys(byYear).map(Number).sort().map(function (y) { return y + ' x' + byYear[y]; }).join('  ·  ') +
       '. The "Date created" filter cell on the sheet says ' + yearUsed + '.');
   }
   if (dateFilterDropped) {
-    lines.push('  ^ Not one Cyber row has a readable "Date created", so the date filter was dropped' +
+    warn.push('Not one Cyber row has a readable "Date created", so the date filter was dropped' +
       ' and all ' + tagOnly + ' of them are counted. Check the column\'s format — a date stored as' +
       ' text in an unusual shape is the usual cause.');
   }
@@ -2514,18 +2614,40 @@ window.Reports.d2 = async function d2(wb) {
     // The scope warning goes on BOTH branches. A near miss is the likelier case
     // and the more dangerous one — "Cyber Security" existing makes the number
     // look Cyber-shaped when it is not.
-    lines.push('  ^ No tag in this file is "cyber", so the tag filter was dropped and all ' +
+    warn.push('No tag in this file is "cyber", so the tag filter was dropped and all ' +
       tagOnly + ' rows are counted. THIS FIGURE COVERS EVERY ASSESSMENT, NOT JUST CYBER ONES.');
-    lines.push(near.length
-      ? '  ^ These tags DO contain the word: ' + near.join('  ·  ') +
+    warn.push(near.length
+      ? 'These tags DO contain the word: ' + near.join('  ·  ') +
         '. If one of them is the population you want, say which and it becomes the filter.'
-      : '  ^ The word "cyber" appears in no tag at all. This export is tagged by zone and year' +
+      : 'The word "cyber" appears in no tag at all. This export is tagged by zone and year' +
         ' rather than by risk category, so tell me which column carries the Cyber/non-Cyber' +
         ' split and the filter can point at it.');
   }
+  lines.push(warn.length
+    ? section('WARNINGS (' + warn.length + ')')
+    : section('WARNINGS') + '\n  none — every rule ran exactly as the script defines it.');
+  warn.forEach(function (w, i) { lines.push('  ^ ' + (i + 1) + '. ' + w); });
+  // One real row per outcome, with the reason attached. A count says a rule
+  // rejected 1172 rows; this says what one of them looked like, which is the
+  // difference between "the filter is wrong" and "the data is wrong".
+  lines.push('', section('SAMPLE ROWS'));
+  if (keptSamples.length) {
+    lines.push('  kept:');
+    keptSamples.forEach(function (l) { lines.push(l); });
+  } else {
+    lines.push('  kept:   (none)');
+  }
+  var dropKeys = Object.keys(dropSamples);
+  if (dropKeys.length) {
+    lines.push('  dropped — one example per reason:');
+    dropKeys.forEach(function (k) { lines.push(dropSamples[k]); });
+  } else {
+    lines.push('  dropped: (none — every row was kept)');
+  }
+
   lines.push(
     '',
-    'Values present in the file:',
+    section('VALUES SEEN'),
     '  Tags:         ' + distinct(individualTags) + '   (individual tags, split on , ; | /)',
     '  Tag cells:    ' + distinct(rows.map(function (r) { return r.Tags; })) + '   (as written)',
     '  Stage:        ' + distinct((keptRows ? filtered : rows).map(function (r) { return r.Stage; })) +
