@@ -80,10 +80,10 @@ window.Reports.d2 = async function d2(wb) {
   var recordTotal = filtered.length;
   var q2_26 = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
   var KPI = [
-    ["Baseline '25", 0.60, 'static'],
-    ["Q1 '26", 0.32, 'static'],
+    ["Baseline '25", 0.60, 'Static'],
+    ["Q1 '26", 0.32, 'Static'],
     ["Q2 '26", q2_26, ''],
-    ["Target '26", 0.65, 'static'],
+    ["Target '26", 0.65, 'Static'],
   ];
 
   function setCell(grid, row1, col1, value) {
