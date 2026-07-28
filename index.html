@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-28.2';
+window.PRP_BUILD = '2026-07-28.3';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -1386,6 +1386,9 @@ window.ReportBridge = (function () {
 //    ({formula, result}) so the in-browser reports — which read cached
 //    values, never recalculate — see real data. Excel still recalculates on
 //    open (calcProperties.fullCalcOnLoad), keeping TODAY() fresh.
+//  · Tags are resolved via findOrAddColumn (case-insensitive) rather than
+//    addColumn, so a source header of 'tags' is overwritten in place instead
+//    of spawning a second 'Tags' column. See applyTags().
 window.CreatePRP = (function () {
   'use strict';
 
@@ -1393,6 +1396,17 @@ window.CreatePRP = (function () {
   var SHEET_TPRM = 'TPRM Web-Portal Export';   // deviation — see header comment
   var SHEET_ASSESSMENT = 'OneTrust Assessment';
   var OUTPUT_NAME = 'PRP Sample Jun (2).xlsx';
+
+  // ── tagging rules ───────────────────────────────────────────────────────
+  // Replaces the manual step of filtering Respondents to a category, typing
+  // the tag over the visible rows, clearing the filter, then filling the
+  // rest. Matching is lowercased + substring, so a multi-respondent cell
+  // ('Sreenivas Kukkala; A. Other') still resolves to Finance.
+  var FINANCE_RESPONDENTS = ['sreenivas kukkala'];
+  var FINANCE_TAG = 'Finance';
+  var DEFAULT_TAG = 'Cyber';
+  var TAGS_HEADER = 'Tags';
+  var RESPONDENT_HEADERS = ['Respondents', 'Respondent', 'Respondent Name', 'Assignee'];
 
   var MS_PER_DAY = 86400000;
   var EXCEL_EPOCH = Date.UTC(1899, 11, 30);    // Excel serial 0
@@ -1535,6 +1549,29 @@ window.CreatePRP = (function () {
     ws.getCell(1, newCol).value = headerName;
     return newCol;
   }
+  // Case-insensitive reuse. Used for Tags only: unlike Ageing/Working1/… the
+  // Tags column already exists in the export, and its casing is whatever
+  // OneTrust emitted — an exact-match miss would append a duplicate column
+  // and leave the real one stale.
+  function findOrAddColumn(ws, headerName) {
+    var existing = findColumn(ws, headerName);
+    if (existing) return existing;
+    var newCol = ws.columnCount + 1;
+    ws.getCell(1, newCol).value = headerName;
+    return newCol;
+  }
+
+  // True when the row holds nothing at all — interior blanks in the export
+  // must not pick up a default tag just for occupying a row number.
+  function isEmptyRow(ws, r) {
+    var vals = ws.getRow(r).values;
+    if (!vals) return true;
+    for (var c = 1; c < vals.length; c++) {
+      var v = plainVal(vals[c]);
+      if (v !== null && v !== undefined && v !== '') return false;
+    }
+    return true;
+  }
 
   async function convertDateColumn(ws, colNum) {
     if (!colNum) return;
@@ -1547,6 +1584,55 @@ window.CreatePRP = (function () {
       if (parsed) { cell.value = parsed; cell.numFmt = 'dd-mm-yyyy'; }
       if ((r & 2047) === 0) await _yield();
     }
+  }
+
+  // ── tagging ─────────────────────────────────────────────────────────────
+  // Pure: respondent cell value → tag. Exposed for tests.
+  function tagFor(respondent) {
+    var text = (respondent === null || respondent === undefined)
+      ? '' : String(respondent).trim().toLowerCase();
+    for (var i = 0; i < FINANCE_RESPONDENTS.length; i++) {
+      if (text.indexOf(FINANCE_RESPONDENTS[i]) !== -1) return FINANCE_TAG;
+    }
+    return DEFAULT_TAG;
+  }
+
+  // Overwrites Tags for every populated row — the filter-and-fill, in code.
+  // Runs before the calculated columns so a freshly created Tags column
+  // lands ahead of Ageing/Working1/Working2/30sep26, matching the layout the
+  // reports expect.
+  async function applyTags(ws, warnings, progress) {
+    var respondentCol = null, headerUsed = null;
+    for (var i = 0; i < RESPONDENT_HEADERS.length && !respondentCol; i++) {
+      respondentCol = findColumn(ws, RESPONDENT_HEADERS[i]);
+      if (respondentCol) headerUsed = RESPONDENT_HEADERS[i];
+    }
+    // Hard failure, not a warning: a silently untagged workbook would flow
+    // into the reports looking valid.
+    if (!respondentCol) {
+      throw new Error('Respondent column not found in "' + SHEET_ASSESSMENT +
+        '". Expected one of: ' + RESPONDENT_HEADERS.join(', '));
+    }
+
+    var tagsCol = findOrAddColumn(ws, TAGS_HEADER);
+    var counts = { finance: 0, cyber: 0, header: headerUsed };
+
+    for (var r = 2; r <= ws.rowCount; r++) {
+      if (isEmptyRow(ws, r)) continue;
+      var tag = tagFor(plainVal(ws.getCell(r, respondentCol).value));
+      ws.getCell(r, tagsCol).value = tag;
+      if (tag === FINANCE_TAG) counts.finance++; else counts.cyber++;
+      if ((r & 2047) === 0) {
+        progress('Tagging respondents — row ' + r.toLocaleString() + '…');
+        await _yield();
+      }
+    }
+
+    if (counts.finance === 0) {
+      warnings.push(SHEET_ASSESSMENT + ': no rows matched the Finance respondent (' +
+        headerUsed + ' column) — everything tagged ' + DEFAULT_TAG);
+    }
+    return counts;
   }
 
   // ── process_risk_export ─────────────────────────────────────────────────
@@ -1565,7 +1651,14 @@ window.CreatePRP = (function () {
   }
 
   // ── process_assessment ──────────────────────────────────────────────────
-  async function processAssessment(ws, warnings) {
+  async function processAssessment(ws, warnings, onProgress) {
+    var progress = onProgress || function () {};
+
+    // Step 1 — tag every populated row before anything is appended.
+    var tagCounts = await applyTags(ws, warnings, progress);
+
+    // Step 2 — the existing workflow, unchanged.
+    progress('Adding assessment formulas…');
     await convertDateColumn(ws, findColumn(ws, 'Date created'));
     await convertDateColumn(ws, findColumn(ws, 'Date submitted'));
     var ageingCol = addColumn(ws, 'Ageing');
@@ -1613,6 +1706,8 @@ window.CreatePRP = (function () {
 
       if ((r & 2047) === 0) await _yield();
     }
+
+    return { tags: tagCounts };
   }
 
   async function loadFirstSheet(file) {
@@ -1650,8 +1745,8 @@ window.CreatePRP = (function () {
 
     progress('Adding risk ageing formulas…');
     await processRiskExport(wsRisk, warnings);
-    progress('Adding assessment formulas…');
-    await processAssessment(wsAssessment, warnings);
+    progress('Tagging assessment respondents…');
+    var assessmentResult = await processAssessment(wsAssessment, warnings, progress);
 
     progress('Writing workbook…');
     var bytes = await out.xlsx.writeBuffer();
@@ -1661,7 +1756,11 @@ window.CreatePRP = (function () {
       stats: {
         risk: { rows: wsRisk.rowCount, cols: wsRisk.columnCount },
         tprm: { rows: wsTprm.rowCount, cols: wsTprm.columnCount },
-        assessment: { rows: wsAssessment.rowCount, cols: wsAssessment.columnCount },
+        assessment: {
+          rows: wsAssessment.rowCount,
+          cols: wsAssessment.columnCount,
+          tags: assessmentResult.tags,
+        },
       },
     };
   }
@@ -1677,6 +1776,9 @@ window.CreatePRP = (function () {
       serialFromDate: serialFromDate,
       serialOf: serialOf,
       plainVal: plainVal,
+      tagFor: tagFor,
+      FINANCE_RESPONDENTS: FINANCE_RESPONDENTS,
+      RESPONDENT_HEADERS: RESPONDENT_HEADERS,
     },
   };
 })();
