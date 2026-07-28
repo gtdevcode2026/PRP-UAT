@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-28.4';
+window.PRP_BUILD = '2026-07-28.7';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -2327,7 +2327,7 @@ window.Reports.d2 = async function d2(wb) {
   KPI.forEach(function (k, i) {
     var rowNum = kpiStartRow + 1 + i;
     setCell(grid, rowNum, 1, k[0]);
-    setCell(grid, rowNum, 2, k[1]);
+    setCell(grid, rowNum, 2, Math.round(k[1] * 100) + '%');
     setCell(grid, rowNum, 3, k[2]);
   });
   var noteRow = kpiStartRow + KPI.length + 2;
@@ -2571,7 +2571,10 @@ window.Reports.s1c = async function s1c(wb) {
 
   var pivot = E.pivotCount(
     rows,
-    function (r) { return String(r.zone_assessing); },
+    // GROWTH / growth arrive as case-variant zones — fold them into one
+    // 'Growth' bucket so the Pivot sheet and Active-by-Zone chart show a
+    // single combined column. Other zones keep their raw casing.
+    function (r) { var z = String(r.zone_assessing); return /^growth$/i.test(z.trim()) ? 'Growth' : z; },
     function (r) { return String(r.assessment_status); },
     { margins: true, marginsName: 'Grand Total' }
   );
@@ -3048,6 +3051,10 @@ window.Reports.s3d = async function s3d(wb) {
 
   rows.forEach(function (r) {
     r[organizationCol] = E.isBlank(r[organizationCol]) ? '' : String(r[organizationCol]).trim();
+    // BEES and BEES | FINTECH report as one combined org named Growth —
+    // normalized here, before any grouping, so the pivot, Zone Summary and
+    // their charts all see a single merged row. Case/spacing-insensitive.
+    if (/^bees(\s*\|\s*fintech)?$/i.test(r[organizationCol])) r[organizationCol] = 'Growth';
     r[stageCol] = E.isBlank(r[stageCol]) ? '' : String(r[stageCol]).trim();
     r.Stage_Clean = r[stageCol].toLowerCase().trim();
   });
@@ -3096,7 +3103,7 @@ window.Reports.s3d = async function s3d(wb) {
   );
 
   var ZONE_MAP = {
-    'Africa': 'AFR', 'APAC': 'APAC', 'BEES': 'GRO', 'BEES | FINTECH': 'GRO',
+    'Africa': 'AFR', 'APAC': 'APAC', 'Growth': 'GRO',
     'Europe': 'EUR', 'GHQ': 'GHQ', 'Middle America Zone': 'MAZ',
     'North America Zone': 'NAZ', 'South America Zone': 'SAZ',
   };

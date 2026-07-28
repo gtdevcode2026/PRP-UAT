@@ -110,7 +110,7 @@ window.Reports.d2 = async function d2(wb) {
   KPI.forEach(function (k, i) {
     var rowNum = kpiStartRow + 1 + i;
     setCell(grid, rowNum, 1, k[0]);
-    setCell(grid, rowNum, 2, k[1]);
+    setCell(grid, rowNum, 2, Math.round(k[1] * 100) + '%');
     setCell(grid, rowNum, 3, k[2]);
   });
   var noteRow = kpiStartRow + KPI.length + 2;

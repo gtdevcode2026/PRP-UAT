@@ -5,9 +5,9 @@
 // found — this makes every row "Open" on the shipped sample data, since its
 // Aging column holds text, not numbers; reproduced deliberately, not
 // "fixed" — confirmed with the user), classifies Open/Overdue (>90 days),
-// pivots Organization x Risk_Status, maps orgs to zones (merging duplicate
-// mapped zones, e.g. BEES + BEES|FINTECH -> GRO), and builds a separate
-// Zone Summary (Total/Open risk counts by raw organization name). Writes
+// merges BEES + BEES|FINTECH into a single org named "Growth" before any
+// grouping, pivots Organization x Risk_Status, maps orgs to zones, and
+// builds a separate Zone Summary (Total/Open counts by org name). Writes
 // "Risk_Output.xlsx" with 3 sheets; charts anchored ~E4.
 window.Reports.s3d = async function s3d(wb) {
   var E = window.ReportEngine;
@@ -44,6 +44,10 @@ window.Reports.s3d = async function s3d(wb) {
 
   rows.forEach(function (r) {
     r[organizationCol] = E.isBlank(r[organizationCol]) ? '' : String(r[organizationCol]).trim();
+    // BEES and BEES | FINTECH report as one combined org named Growth —
+    // normalized here, before any grouping, so the pivot, Zone Summary and
+    // their charts all see a single merged row. Case/spacing-insensitive.
+    if (/^bees(\s*\|\s*fintech)?$/i.test(r[organizationCol])) r[organizationCol] = 'Growth';
     r[stageCol] = E.isBlank(r[stageCol]) ? '' : String(r[stageCol]).trim();
     r.Stage_Clean = r[stageCol].toLowerCase().trim();
   });
@@ -92,7 +96,7 @@ window.Reports.s3d = async function s3d(wb) {
   );
 
   var ZONE_MAP = {
-    'Africa': 'AFR', 'APAC': 'APAC', 'BEES': 'GRO', 'BEES | FINTECH': 'GRO',
+    'Africa': 'AFR', 'APAC': 'APAC', 'Growth': 'GRO',
     'Europe': 'EUR', 'GHQ': 'GHQ', 'Middle America Zone': 'MAZ',
     'North America Zone': 'NAZ', 'South America Zone': 'SAZ',
   };

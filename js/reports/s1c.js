@@ -18,7 +18,10 @@ window.Reports.s1c = async function s1c(wb) {
 
   var pivot = E.pivotCount(
     rows,
-    function (r) { return String(r.zone_assessing); },
+    // GROWTH / growth arrive as case-variant zones — fold them into one
+    // 'Growth' bucket so the Pivot sheet and Active-by-Zone chart show a
+    // single combined column. Other zones keep their raw casing.
+    function (r) { var z = String(r.zone_assessing); return /^growth$/i.test(z.trim()) ? 'Growth' : z; },
     function (r) { return String(r.assessment_status); },
     { margins: true, marginsName: 'Grand Total' }
   );
