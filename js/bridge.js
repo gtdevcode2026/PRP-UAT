@@ -96,7 +96,9 @@ window.ReportBridge = (function () {
     };
   }
 
-  async function runReport(entry, file) {
+  // opts is passed straight through to the report (d2 reads
+  // opts.financeRespondents — the names typed in the Generate card).
+  async function runReport(entry, file, opts) {
     var buf = await file.arrayBuffer();
     // No cellDates: true — date cells come back as raw Excel serials, and
     // each report reads them via ReportEngine.excelDateInfo/excelYear
@@ -107,7 +109,7 @@ window.ReportBridge = (function () {
     wb.__fileName = file && file.name;
     var fn = window.Reports[entry.id];
     if (!fn) throw new Error('No JS report implementation for ' + entry.id);
-    var result = await fn(wb);
+    var result = await fn(wb, opts || {});
     return buildPayload(entry.id, result);
   }
 

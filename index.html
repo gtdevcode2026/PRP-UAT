@@ -516,6 +516,15 @@ body > * { position: relative; z-index: var(--z-base); }
   border: 1px solid var(--hairline-2); cursor: not-allowed;
 }
 .run-hint { font-size: var(--fs-sm); color: var(--tx-mute); text-align: center; padding: 4px 0; }
+.d2-finance { margin-bottom: 10px; }
+.d2-finance[hidden] { display: none; }
+.d2-finance-label { display: block; font-size: var(--fs-sm); color: var(--tx-mute); margin-bottom: 6px; }
+.d2-finance input {
+  width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 10px;
+  background: var(--surface-3); border: 1px solid var(--hairline); color: var(--tx-hi);
+  font: inherit; font-size: var(--fs-sm);
+}
+.d2-finance input:focus { outline: none; border-color: rgba(237,201,79,0.45); }
 .history-note {
   display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
   font-size: var(--fs-sm); color: var(--tx-mute); text-align: center; padding: 2px 0;
@@ -842,6 +851,13 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
       <!-- Step 4 · Generate -->
       <div class="pipe-card pipe-run glass ring ring-gold">
         <div class="pipe-head"><span class="pipe-label">Generate</span></div>
+        <!-- Diagram 2 only (toggled in updateRunBtn): who counts as Finance.
+             Rows mentioning any of these people in Respondents are excluded;
+             the rest count as Cyber. Cleared box = Tags column decides. -->
+        <div class="d2-finance" id="d2-finance" hidden>
+          <label class="d2-finance-label" for="d2-finance-input">Finance respondents · excluded from this report · comma-separated</label>
+          <input type="text" id="d2-finance-input" value="Sreenivas Kukkala" placeholder="e.g. Alice Smith, Bob Jones" autocomplete="off" spellcheck="false">
+        </div>
         <button id="run-btn" class="run-btn" disabled>Run report</button>
         <div class="run-hint" id="run-hint" role="status" aria-live="polite">Loading the report engine…</div>
         <!-- Risk Dashboard keeps its history between runs; surface that state
@@ -860,7 +876,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-29.8';
+window.PRP_BUILD = '2026-07-29.9';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -1387,7 +1403,9 @@ window.ReportBridge = (function () {
       }).join('\n'),
     };
   }
-  async function runReport(entry, file) {
+  // opts is passed straight through to the report (d2 reads
+  // opts.financeRespondents — the names typed in the Generate card).
+  async function runReport(entry, file, opts) {
     var buf = await file.arrayBuffer();
     var wb;
     if (buf.byteLength > 40 * 1024 * 1024) {
@@ -1410,7 +1428,7 @@ window.ReportBridge = (function () {
     wb.__fileName = file && file.name;
     var fn = window.Reports[entry.id];
     if (!fn) throw new Error('No JS report implementation for ' + entry.id);
-    var result = await fn(wb);
+    var result = await fn(wb, opts || {});
     return buildPayload(entry.id, result);
   }
   return { runReport, buildPayload, renderStyledPng, dataUrlToBase64, arrayBufferToBase64 };
@@ -2271,7 +2289,7 @@ window.Reports.d1 = async function d1(wb) {
 // (filter area, then the pivot table, then the KPI table below it) — the
 // exact row offsets matter because the existing preview pipeline re-treats
 // row 0 as headers and sparsity-trims the rest, same as s2a.
-window.Reports.d2 = async function d2(wb) {
+window.Reports.d2 = async function d2(wb, opts) {
   var E = window.ReportEngine;
   var B = window.ReportBridge;
 
@@ -2292,10 +2310,34 @@ window.Reports.d2 = async function d2(wb) {
     });
   });
 
+  // Dynamic Finance filter — names typed in the Generate card (shown for
+  // Diagram 2 only). When names are given, a 2026 row whose Respondents cell
+  // mentions ANY of them (case-insensitive substring, so 'A; B' cells match)
+  // is Finance and excluded; every other 2026 row counts as Cyber, whatever
+  // its Tags say. With no names — box cleared — or no Respondents column to
+  // match against, the Tags column written at workbook-creation time decides,
+  // exactly as before.
+  var financeNames = ((opts && opts.financeRespondents) || []).map(function (n) {
+    return String(n).trim().toLowerCase();
+  }).filter(Boolean);
+  var loweredHeaders = rawHeaders.map(function (h) { return h.toLowerCase(); });
+  var respCol = null;
+  ['Respondents', 'Respondent', 'Respondent Name', 'Assignee'].forEach(function (h) {
+    var i = loweredHeaders.indexOf(h.toLowerCase());
+    if (respCol === null && i !== -1) respCol = rawHeaders[i];
+  });
+  var dynamicFilter = financeNames.length > 0 && respCol !== null;
+
+  var excludedFinance = 0;
   var filtered = rows.filter(function (r) {
-    var tagMatch = /^cyber$/i.test(r.Tags);
-    var year = E.excelYear(r['Date created']);
-    return tagMatch && year === 2026;
+    if (E.excelYear(r['Date created']) !== 2026) return false;
+    if (!dynamicFilter) return /^cyber$/i.test(r.Tags);
+    var resp = E.isBlank(r[respCol]) ? '' : String(r[respCol]).toLowerCase();
+    if (financeNames.some(function (n) { return resp.indexOf(n) !== -1; })) {
+      excludedFinance++;
+      return false;
+    }
+    return true;
   });
 
   var CLOSED_STAGES = { 'Completed': 1, 'Under review': 1 };
@@ -2339,6 +2381,14 @@ window.Reports.d2 = async function d2(wb) {
 
   var closedTotal = filtered.filter(function (r) { return r['Final Stage'] === 'Closed'; }).length;
   var recordTotal = filtered.length;
+  // Script log line: which Finance filter actually ran, so a changed number
+  // is never a mystery.
+  var filterLog = dynamicFilter
+    ? 'Finance filter: dynamic — ' + excludedFinance + ' row(s) mentioning [' + financeNames.join(', ') +
+      '] in "' + respCol + '" excluded; ' + recordTotal + ' remaining 2026 rows counted as Cyber.'
+    : financeNames.length
+      ? 'Finance filter: names were given but no Respondents column was found — fell back to Tags == "cyber" (' + recordTotal + ' rows).'
+      : 'Finance filter: Tags column (Tags == "cyber") — ' + recordTotal + ' rows.';
   var q2_26 = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
   var KPI = [
     ["Baseline '25", 0.60, 'Static'],
@@ -2453,6 +2503,7 @@ window.Reports.d2 = async function d2(wb) {
 
   return {
     ok: true,
+    stdout: filterLog,
     files: [{ name: 'output file D2.xlsx', bytes: buf, sheets: [{ name: 'Dashboard', grid: grid }] }],
     // Preview shows the KPI chart only — matching what the preview always
     // showed; the org chart is still embedded in the Excel Dashboard.
@@ -4150,6 +4201,8 @@ function updateRunBtn() {
   } else {
     hint.style.display = 'none';
   }
+  const fin = document.getElementById('d2-finance');
+  if (fin) fin.hidden = currentEntry().id !== 'd2';
   renderHistoryNote();
 }
 
@@ -4218,7 +4271,13 @@ async function handleRun() {
   }
 
   try {
-    const data = await ReportBridge.runReport(entry, S.file);
+    const opts = {};
+    if (entry.id === 'd2') {
+      const inp = document.getElementById('d2-finance-input');
+      if (inp) opts.financeRespondents = inp.value.split(/[,;]/)
+        .map(function(s) { return s.trim(); }).filter(Boolean);
+    }
+    const data = await ReportBridge.runReport(entry, S.file, opts);
     S.result = data;
     renderResults();
   } catch (err) {

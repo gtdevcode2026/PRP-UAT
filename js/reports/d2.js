@@ -10,7 +10,7 @@
 // (filter area, then the pivot table, then the KPI table below it) — the
 // exact row offsets matter because the existing preview pipeline re-treats
 // row 0 as headers and sparsity-trims the rest, same as s2a.
-window.Reports.d2 = async function d2(wb) {
+window.Reports.d2 = async function d2(wb, opts) {
   var E = window.ReportEngine;
   var B = window.ReportBridge;
 
@@ -31,10 +31,34 @@ window.Reports.d2 = async function d2(wb) {
     });
   });
 
+  // Dynamic Finance filter — names typed in the Generate card (shown for
+  // Diagram 2 only). When names are given, a 2026 row whose Respondents cell
+  // mentions ANY of them (case-insensitive substring, so 'A; B' cells match)
+  // is Finance and excluded; every other 2026 row counts as Cyber, whatever
+  // its Tags say. With no names — box cleared — or no Respondents column to
+  // match against, the Tags column written at workbook-creation time decides,
+  // exactly as before.
+  var financeNames = ((opts && opts.financeRespondents) || []).map(function (n) {
+    return String(n).trim().toLowerCase();
+  }).filter(Boolean);
+  var loweredHeaders = rawHeaders.map(function (h) { return h.toLowerCase(); });
+  var respCol = null;
+  ['Respondents', 'Respondent', 'Respondent Name', 'Assignee'].forEach(function (h) {
+    var i = loweredHeaders.indexOf(h.toLowerCase());
+    if (respCol === null && i !== -1) respCol = rawHeaders[i];
+  });
+  var dynamicFilter = financeNames.length > 0 && respCol !== null;
+
+  var excludedFinance = 0;
   var filtered = rows.filter(function (r) {
-    var tagMatch = /^cyber$/i.test(r.Tags);
-    var year = E.excelYear(r['Date created']);
-    return tagMatch && year === 2026;
+    if (E.excelYear(r['Date created']) !== 2026) return false;
+    if (!dynamicFilter) return /^cyber$/i.test(r.Tags);
+    var resp = E.isBlank(r[respCol]) ? '' : String(r[respCol]).toLowerCase();
+    if (financeNames.some(function (n) { return resp.indexOf(n) !== -1; })) {
+      excludedFinance++;
+      return false;
+    }
+    return true;
   });
 
   var CLOSED_STAGES = { 'Completed': 1, 'Under review': 1 };
@@ -78,6 +102,14 @@ window.Reports.d2 = async function d2(wb) {
 
   var closedTotal = filtered.filter(function (r) { return r['Final Stage'] === 'Closed'; }).length;
   var recordTotal = filtered.length;
+  // Script log line: which Finance filter actually ran, so a changed number
+  // is never a mystery.
+  var filterLog = dynamicFilter
+    ? 'Finance filter: dynamic — ' + excludedFinance + ' row(s) mentioning [' + financeNames.join(', ') +
+      '] in "' + respCol + '" excluded; ' + recordTotal + ' remaining 2026 rows counted as Cyber.'
+    : financeNames.length
+      ? 'Finance filter: names were given but no Respondents column was found — fell back to Tags == "cyber" (' + recordTotal + ' rows).'
+      : 'Finance filter: Tags column (Tags == "cyber") — ' + recordTotal + ' rows.';
   var q2_26 = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
   var KPI = [
     ["Baseline '25", 0.60, 'Static'],
@@ -192,6 +224,7 @@ window.Reports.d2 = async function d2(wb) {
 
   return {
     ok: true,
+    stdout: filterLog,
     files: [{ name: 'output file D2.xlsx', bytes: buf, sheets: [{ name: 'Dashboard', grid: grid }] }],
     // Preview shows the KPI chart only — matching what the preview always
     // showed; the org chart is still embedded in the Excel Dashboard.
