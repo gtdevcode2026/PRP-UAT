@@ -289,7 +289,10 @@ window.ReportEngine = (function () {
       if (isBlank(metric) || String(metric).trim() === '') break;
       var val = row[valueCol];
       // Genuine numeric cells only: parseFloat('2026 x36') would yield 2026.
-      var num = typeof val === 'number' ? val : NaN;
+      // Exception: strict "NN%" strings — d2's KPI Value column renders its
+      // fractions as percent text ("60%"), which must keep charting as 0.60.
+      var num = typeof val === 'number' ? val
+        : (typeof val === 'string' && /^-?\d+(\.\d+)?%$/.test(val.trim())) ? parseFloat(val) / 100 : NaN;
       if (isBlank(val) || Number.isNaN(num)) continue;
       if (/formula/i.test(String(metric))) continue;
       labels.push(String(metric));
@@ -477,10 +480,27 @@ window.ReportEngine = (function () {
       var dashGrid = findRawGrid(files, 'Dashboard');
       special = dashGrid ? d2ChartFromGrid(dashGrid) : null;
     } else if (sid === 's4') {
-      // Prefer the rolled-up "Display History" sheet (matches the dashboard
-      // chart's quarter view); fall back to the full monthly history file.
-      var dispGrid = findRawGrid(files, 'Display History');
-      if (dispGrid) special = chartableFromSheet(trimSparse(sheetFromGrid(dispGrid)));
+      // Chart the Dashboard's "Chart Label/Chart Value" helper block — the
+      // same Baseline + display periods + Target series the embedded native
+      // chart plots. Falls back to the rolled-up Display History sheet, then
+      // to the full monthly history file.
+      var s4Dash = findRawGrid(files, 'Dashboard');
+      if (s4Dash) {
+        var s4Labels = [], s4Values = [], s4Started = false;
+        for (var dr = 0; dr < s4Dash.length; dr++) {
+          var drow = s4Dash[dr] || [];
+          if (!s4Started) { if (drow[0] === 'Chart Label') s4Started = true; continue; }
+          if (isBlank(drow[0])) break;
+          var dv = typeof drow[1] === 'number' ? drow[1] : parseFloat(drow[1]);
+          s4Labels.push(String(drow[0]));
+          s4Values.push(Number.isNaN(dv) ? 0 : dv);
+        }
+        if (s4Labels.length) special = { type: 'bar', labels: s4Labels, series: [{ name: 'Progress', values: s4Values }] };
+      }
+      if (!special) {
+        var dispGrid = findRawGrid(files, 'Display History');
+        if (dispGrid) special = chartableFromSheet(trimSparse(sheetFromGrid(dispGrid)));
+      }
       if (!special) {
         var histFile = files.filter(function (f) { return f.name.toLowerCase() === 'history.xlsx'; })[0];
         if (histFile) {
@@ -508,6 +528,9 @@ window.ReportEngine = (function () {
         return null;
       }
       var cdf = chartableFromSheet(p.sheet);
+      // d1's native Excel chart is stacked; the preview mirrors it (green
+      // Supplier-Added bars stacked over the gold Tier-1 bars).
+      if (cdf && sid === 'd1') cdf.stacked = true;
       if (cdf) { chartsDone++; return cdf; }
       return null;
     });

@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-29.2';
+window.PRP_BUILD = '2026-07-29.3';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -1102,7 +1102,10 @@ window.ReportEngine = (function () {
       if (isBlank(metric) || String(metric).trim() === '') break;
       var val = row[valueCol];
       // Genuine numeric cells only: parseFloat('2026 x36') would yield 2026.
-      var num = typeof val === 'number' ? val : NaN;
+      // Exception: strict "NN%" strings — d2's KPI Value column renders its
+      // fractions as percent text ("60%"), which must keep charting as 0.60.
+      var num = typeof val === 'number' ? val
+        : (typeof val === 'string' && /^-?\d+(\.\d+)?%$/.test(val.trim())) ? parseFloat(val) / 100 : NaN;
       if (isBlank(val) || Number.isNaN(num)) continue;
       if (/formula/i.test(String(metric))) continue;
       labels.push(String(metric)); values.push(num);
@@ -1220,10 +1223,27 @@ window.ReportEngine = (function () {
       var dashGrid = findRawGrid(files, 'Dashboard');
       special = dashGrid ? d2ChartFromGrid(dashGrid) : null;
     } else if (sid === 's4') {
-      // Prefer the rolled-up "Display History" sheet (matches the dashboard
-      // chart's quarter view); fall back to the full monthly history file.
-      var dispGrid = findRawGrid(files, 'Display History');
-      if (dispGrid) special = chartableFromSheet(trimSparse(sheetFromGrid(dispGrid)));
+      // Chart the Dashboard's "Chart Label/Chart Value" helper block — the
+      // same Baseline + display periods + Target series the embedded native
+      // chart plots. Falls back to the rolled-up Display History sheet, then
+      // to the full monthly history file.
+      var s4Dash = findRawGrid(files, 'Dashboard');
+      if (s4Dash) {
+        var s4Labels = [], s4Values = [], s4Started = false;
+        for (var dr = 0; dr < s4Dash.length; dr++) {
+          var drow = s4Dash[dr] || [];
+          if (!s4Started) { if (drow[0] === 'Chart Label') s4Started = true; continue; }
+          if (isBlank(drow[0])) break;
+          var dv = typeof drow[1] === 'number' ? drow[1] : parseFloat(drow[1]);
+          s4Labels.push(String(drow[0]));
+          s4Values.push(Number.isNaN(dv) ? 0 : dv);
+        }
+        if (s4Labels.length) special = { type: 'bar', labels: s4Labels, series: [{ name: 'Progress', values: s4Values }] };
+      }
+      if (!special) {
+        var dispGrid = findRawGrid(files, 'Display History');
+        if (dispGrid) special = chartableFromSheet(trimSparse(sheetFromGrid(dispGrid)));
+      }
       if (!special) {
         var histFile = files.filter(function (f) { return f.name.toLowerCase() === 'history.xlsx'; })[0];
         if (histFile) { for (var i = 0; i < histFile.sheets.length; i++) { var cdf = chartableFromSheet(trimSparse(sheetFromGrid(histFile.sheets[i].grid))); if (cdf) { special = cdf; break; } } }
@@ -1242,6 +1262,9 @@ window.ReportEngine = (function () {
       if (!showChart) return null;
       if (sid === 'd2' || sid === 's4' || sid === 's2a') { if (special) { chartsDone++; return special; } return null; }
       var cdf = chartableFromSheet(p.sheet);
+      // d1's native Excel chart is stacked; the preview mirrors it (green
+      // Supplier-Added bars stacked over the gold Tier-1 bars).
+      if (cdf && sid === 'd1') cdf.stacked = true;
       if (cdf) { chartsDone++; return cdf; }
       return null;
     });
@@ -1347,11 +1370,7 @@ window.ReportBridge = (function () {
     var charts = E.selectCharts(sid, processed, result.files);
     var chartImages = result.chartImages || {};
     var sheetsOut = processed.map(function (p, i) {
-      var img = chartImages[p.name] || null;
-      // s4's chart preview shows the same styled chart that lands in Excel
-      // (the rendered PNG) instead of the auto-derived light-theme chart.
-      var useImage = sid === 's4' && !!img;
-      return { file: p.file, name: p.name, rows: p.sheet.rows.length, cols: p.sheet.headers.length, headers: p.sheet.headers, preview: E.previewRows(p.sheet, 50), chart: useImage ? null : charts[i], chartImageUrl: img, useChartImage: useImage };
+      return { file: p.file, name: p.name, rows: p.sheet.rows.length, cols: p.sheet.headers.length, headers: p.sheet.headers, preview: E.previewRows(p.sheet, 50), chart: charts[i], chartImageUrl: chartImages[p.name] || null };
     });
     return {
       ok: !!result.ok, returncode: result.ok ? 0 : 1, stdout: result.stdout || '', stderr: result.stderr || '',
@@ -3713,39 +3732,12 @@ window.Reports.s4 = async function s4(wb) {
   }
   var gPreview = renderPercents(g, pctCells);
 
-  // Preview chart comes from the History table (matches today's app, which
-  // derives it from History.xlsx, not from the Dashboard's own matrix — see
-  // ReportEngine.selectCharts' 's4' branch). The embedded chart on the
-  // Dashboard sheet reproduces the original xlsxwriter native column chart
-  // instead (black chart/plot area, gray Baseline/Target end-bars, gold
-  // bars in between, white centered value labels, no legend/gridlines).
-  var barColors = calcLabels.map(function (_, i) {
-    return (i === 0 || i === calcLabels.length - 1) ? '#BFBFBF' : '#FFC000';
-  });
-  var progressTraces = [
-    { x: calcLabels, y: calcValues, type: 'bar', marker: { color: barColors },
-      text: calcValues.map(String), textposition: 'inside', insidetextanchor: 'middle', textangle: 0,
-      textfont: { color: '#ffffff', size: 12 } },
-  ];
-  var progressLayout = {
-    paper_bgcolor: '#000000', plot_bgcolor: '#000000',
-    title: { text: "<b>Cumulative Risk Treatment<br>Progress</b>", font: { color: '#ffffff', size: 18 } },
-    xaxis: { tickfont: { color: '#ffffff' }, linecolor: '#ffffff', showline: true },
-    yaxis: { visible: false },
-    showlegend: false,
-    margin: { t: 70, r: 20, b: 50, l: 20 },
-    // Closed % above each period bar, 80% above Target (workflow step 24).
-    // PNG only: the native Excel chart's single series can't carry a second
-    // label set, so there the percents stay in the Percent Label column.
-    annotations: calcLabels.map(function (label, i) {
-      var p = calcPercents[i];
-      if (p === '') return null;
-      return { x: label, y: calcValues[i], text: Math.round(p * 100) + '%', showarrow: false,
-        yanchor: 'bottom', yshift: 2, font: { color: '#ffffff', size: 12 } };
-    }).filter(Boolean),
-  };
-  var progressChartPng = await B.renderStyledPng(progressTraces, progressLayout, 720, 430);
-
+  // Preview chart: the standard app preview (ReportEngine.selectCharts' 's4'
+  // branch charts the Dashboard's "Chart Label/Chart Value" helper block, so
+  // the preview plots the same Baseline + display periods + Target series as
+  // the embedded chart). The Dashboard sheet's own chart is the native
+  // xlsxwriter-style column chart injected below (black chart/plot area,
+  // gray Baseline/Target end-bars, gold bars in between, white labels).
   var workbook = new ExcelJS.Workbook();
   var wsDash = workbook.addWorksheet(DASH_SHEET);
   g.forEach(function (r) { wsDash.addRow(r); });
@@ -3918,7 +3910,6 @@ window.Reports.s4 = async function s4(wb) {
       { name: OUTPUT_FILE, bytes: riskOutputBuf, sheets: [{ name: DASH_SHEET, grid: gPreview }, { name: DISPLAY_SHEET, grid: displayGridPreview }, { name: HIST_USED_SHEET, grid: historyGrid }] },
       { name: HISTORY_FILE, bytes: historyBuf, sheets: [{ name: HIST_SHEET, grid: historyGrid }] },
     ],
-    chartImages: (function () { var m = {}; m[DASH_SHEET] = progressChartPng; return m; })(),
   };
 };
 
@@ -4266,7 +4257,7 @@ function renderResults() {
       '<div class="panel-head"><span class="panel-title">' + esc(sheet.name) + '</span></div>' +
       tableHtml(sheet.headers, sheet.preview, sheet.rows) +
       '</div>';
-    if (sheet.chart || (sheet.useChartImage && sheet.chartImageUrl)) {
+    if (sheet.chart) {
       html += '<div class="sheet-stack">' +
               '<div class="panel glass ring">' +
               '<div class="panel-head"><span class="panel-title">Chart preview</span></div>' +
@@ -4387,18 +4378,11 @@ function renderResults() {
     });
   }
 
-  // Render charts for browser preview. A sheet flagged useChartImage shows
-  // its report-rendered PNG (the same styled chart embedded in the Excel
-  // output); everything else gets the auto-derived Plotly chart.
+  // Render Plotly charts for browser preview
   d.sheets.forEach(function(sheet, si) {
+    if (!sheet.chart) return;
     const el = document.getElementById('chart-' + si);
     if (!el) return;
-    if (sheet.useChartImage && sheet.chartImageUrl) {
-      el.innerHTML = '<img src="' + escAttr(sheet.chartImageUrl) + '" alt="' + escAttr(sheet.name) +
-        ' chart" style="width:100%;height:100%;min-height:inherit;object-fit:contain;display:block;">';
-      return;
-    }
-    if (!sheet.chart) return;
     const cfg = sheet.chart.type === 'hbar'
       ? buildHBar(sheet.chart, 'Improve in Supplier Response Time')
       : buildBar(sheet.chart, null);
@@ -4458,7 +4442,7 @@ function buildBar(chartData, title) {
       hovertemplate:"<b>%{x}</b><br>" + esc(s.name) + ": <b>%{y:,.0f}</b><extra></extra>",
     };
   });
-  const layout = Object.assign(_baseLayout(title), { barmode:"group", bargap:0.22, bargroupgap:0.06 });
+  const layout = Object.assign(_baseLayout(title), { barmode: chartData.stacked ? "stack" : "group", bargap:0.22, bargroupgap:0.06 });
   return { traces, layout };
 }
 

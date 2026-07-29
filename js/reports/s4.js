@@ -429,39 +429,12 @@ window.Reports.s4 = async function s4(wb) {
   }
   var gPreview = renderPercents(g, pctCells);
 
-  // Preview chart comes from the History table (matches today's app, which
-  // derives it from History.xlsx, not from the Dashboard's own matrix — see
-  // ReportEngine.selectCharts' 's4' branch). The embedded chart on the
-  // Dashboard sheet reproduces the original xlsxwriter native column chart
-  // instead (black chart/plot area, gray Baseline/Target end-bars, gold
-  // bars in between, white centered value labels, no legend/gridlines).
-  var barColors = calcLabels.map(function (_, i) {
-    return (i === 0 || i === calcLabels.length - 1) ? '#BFBFBF' : '#FFC000';
-  });
-  var progressTraces = [
-    { x: calcLabels, y: calcValues, type: 'bar', marker: { color: barColors },
-      text: calcValues.map(String), textposition: 'inside', insidetextanchor: 'middle', textangle: 0,
-      textfont: { color: '#ffffff', size: 12 } },
-  ];
-  var progressLayout = {
-    paper_bgcolor: '#000000', plot_bgcolor: '#000000',
-    title: { text: "<b>Cumulative Risk Treatment<br>Progress</b>", font: { color: '#ffffff', size: 18 } },
-    xaxis: { tickfont: { color: '#ffffff' }, linecolor: '#ffffff', showline: true },
-    yaxis: { visible: false },
-    showlegend: false,
-    margin: { t: 70, r: 20, b: 50, l: 20 },
-    // Closed % above each period bar, 80% above Target (workflow step 24).
-    // PNG only: the native Excel chart's single series can't carry a second
-    // label set, so there the percents stay in the Percent Label column.
-    annotations: calcLabels.map(function (label, i) {
-      var p = calcPercents[i];
-      if (p === '') return null;
-      return { x: label, y: calcValues[i], text: Math.round(p * 100) + '%', showarrow: false,
-        yanchor: 'bottom', yshift: 2, font: { color: '#ffffff', size: 12 } };
-    }).filter(Boolean),
-  };
-  var progressChartPng = await B.renderStyledPng(progressTraces, progressLayout, 720, 430);
-
+  // Preview chart: the standard app preview (ReportEngine.selectCharts' 's4'
+  // branch charts the Dashboard's "Chart Label/Chart Value" helper block, so
+  // the preview plots the same Baseline + display periods + Target series as
+  // the embedded chart). The Dashboard sheet's own chart is the native
+  // xlsxwriter-style column chart injected below (black chart/plot area,
+  // gray Baseline/Target end-bars, gold bars in between, white labels).
   var workbook = new ExcelJS.Workbook();
   var wsDash = workbook.addWorksheet(DASH_SHEET);
   g.forEach(function (r) { wsDash.addRow(r); });
@@ -634,6 +607,5 @@ window.Reports.s4 = async function s4(wb) {
       { name: OUTPUT_FILE, bytes: riskOutputBuf, sheets: [{ name: DASH_SHEET, grid: gPreview }, { name: DISPLAY_SHEET, grid: displayGridPreview }, { name: HIST_USED_SHEET, grid: historyGrid }] },
       { name: HISTORY_FILE, bytes: historyBuf, sheets: [{ name: HIST_SHEET, grid: historyGrid }] },
     ],
-    chartImages: (function () { var m = {}; m[DASH_SHEET] = progressChartPng; return m; })(),
   };
 };

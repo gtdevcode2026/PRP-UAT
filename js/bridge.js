@@ -66,10 +66,6 @@ window.ReportBridge = (function () {
     var chartImages = result.chartImages || {};
 
     var sheetsOut = processed.map(function (p, i) {
-      var img = chartImages[p.name] || null;
-      // s4's chart preview shows the same styled chart that lands in Excel
-      // (the rendered PNG) instead of the auto-derived light-theme chart.
-      var useImage = sid === 's4' && !!img;
       return {
         file: p.file,
         name: p.name,
@@ -77,9 +73,8 @@ window.ReportBridge = (function () {
         cols: p.sheet.headers.length,
         headers: p.sheet.headers,
         preview: E.previewRows(p.sheet, 50),
-        chart: useImage ? null : charts[i],
-        chartImageUrl: img,
-        useChartImage: useImage,
+        chart: charts[i],
+        chartImageUrl: chartImages[p.name] || null,
       };
     });
 
