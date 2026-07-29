@@ -2,8 +2,8 @@
 // Reads "OneTrust - Risk Export", computes Open/Closed/Total risk counts
 // (Open = Evaluation+Identified+Treatment stages, Closed = Monitoring stage,
 // year-filtered on Date closed when present), derives a period label from the
-// latest 2026 date in Date created/Date closed (max(), March -> Q1 '26),
-// builds a Baseline'25 -> last-3-periods -> Target'26 matrix, and writes
+// latest ELAPSED 2026 date in Date created/Date closed, builds a
+// Baseline'25 -> last-3-periods -> Target'26 matrix, and writes
 // "Risk_Output.xlsx" (sheets "Dashboard" + "History Used") and "History.xlsx".
 //
 // History now carries forward between runs — see window.S4History below.
@@ -95,6 +95,10 @@ window.Reports.s4 = async function s4(wb) {
   var BASELINE_OPEN_RISK = 536, BASELINE_CLOSED_RISK = 42, BASELINE_TOTAL_RISK = 578;
   var TARGET_LABEL = "Target '26";
   var TARGET_PERCENT = 0.80;
+  // A month must hold at least this share of the year's dated rows before it can
+  // name the reporting period — see getPeriodLabel. Mirrors PERIOD_MIN_SHARE in
+  // diagram4/automation.py; change both together.
+  var PERIOD_MIN_SHARE = 0.05;
   var SEED_HISTORY_WHEN_MISSING = true;
   var SEED_ROWS = [
     { Month: "Q1 '26", 'Open risk as on date': 655, 'Closed Risk in 2026': 41, 'Total Risk': 696, 'Risk Created in 2026': 118 },
@@ -172,35 +176,39 @@ window.Reports.s4 = async function s4(wb) {
   var riskCreated = rows.filter(function (r) { return E.excelYear(r[dateCreatedCol]) === YEAR; }).length;
   var targetValue = Math.round(totalRisk * TARGET_PERCENT);
 
-  // get_period_label — straight port of the script's max() rule: the single
-  // latest 2026 date across Date created/Date closed names the reporting
-  // month, and March maps to "Q1 '26". The clock is never consulted, so the
-  // same workbook always produces the same label. One stray future-dated row
-  // (a scheduled closure, a mistyped year) will name the period — that is
-  // the script's behavior, reproduced deliberately; the per-month tally in
-  // the run summary makes such a row visible.
-  var monthTally = [], chosenMonth = null;
+  // get_period_label — the reporting period is the LAST month in the file that
+  // carries real volume, and March maps to "Q1 '26". The clock is never
+  // consulted, so the same workbook always produces the same label.
+  //
+  // Deliberately not max(): the latest single date let one row dated 2026-12-14
+  // (a scheduled closure, a mistyped year) name a "Dec '26" period on a file
+  // whose data is May. A month holding at least PERIOD_MIN_SHARE of the year's
+  // dated rows is a reporting month; anything after it is noise, and it is
+  // named in the run summary rather than dropped quietly. The Python does the
+  // same — keep the two in step if either changes.
+  var monthTally = [], skippedMonths = [], chosenMonth = null, periodFloor = 0;
 
   function getPeriodLabel() {
-    var byMonth = {}, latest = null;
+    var byMonth = {}, total = 0;
     [dateCreatedCol, dateClosedCol].forEach(function (col) {
       rows.forEach(function (r) {
         var d = E.excelDateInfo(r[col]);
         if (!d || d.year !== YEAR) return;
         byMonth[d.month] = (byMonth[d.month] || 0) + 1;
-        var key = [d.month, d.day, d.hour, d.minute, d.second];
-        if (!latest) { latest = key; return; }
-        for (var i = 0; i < key.length; i++) {
-          if (key[i] > latest[i]) { latest = key; break; }
-          if (key[i] < latest[i]) break;
-        }
+        total++;
       });
     });
-    if (!latest) {
+    var months = Object.keys(byMonth).map(Number).sort(function (a, b) { return a - b; });
+    if (!months.length) {
       throw new Error('No valid ' + YEAR + ' dates found in Date created/Date closed columns.');
     }
-    chosenMonth = latest[0];
-    monthTally = Object.keys(byMonth).map(Number).sort(function (a, b) { return a - b; })
+    periodFloor = Math.max(2, Math.ceil(total * PERIOD_MIN_SHARE));
+    var solid = months.filter(function (m) { return byMonth[m] >= periodFloor; });
+    var pool = solid.length ? solid : months;
+    chosenMonth = pool[pool.length - 1];
+
+    monthTally = months.map(function (m) { return MONTH_ABBR[m - 1] + ' x' + byMonth[m]; });
+    skippedMonths = months.filter(function (m) { return m > chosenMonth; })
       .map(function (m) { return MONTH_ABBR[m - 1] + ' x' + byMonth[m]; });
 
     return chosenMonth === 3 ? "Q1 '26" : (MONTH_ABBR[chosenMonth - 1] + " '26");
@@ -271,16 +279,59 @@ window.Reports.s4 = async function s4(wb) {
   // build_dashboard_frames
   function periodSortKey(label) {
     label = String(label);
-    if (label.indexOf('Q1') === 0) return 3;
+    var q = label.match(/^Q([1-4])/);
+    if (q) return +q[1] * 3; // a quarter sorts at its ending month: Q1=3, Q2=6, Q3=9, Q4=12
     var m = label.match(/^([A-Za-z]{3})/);
     var order = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
     return m ? (order[m[1]] || 99) : 99;
   }
   var sortedHistory = history.slice().sort(function (a, b) { return periodSortKey(a.Month) - periodSortKey(b.Month); });
-  // history.tail(3), as the script does: the last 3 sorted periods appear
-  // between Baseline and Target, whatever they are.
-  var graphHistory = sortedHistory.slice(-3);
-  var periodLabels = graphHistory.map(function (r) { return r.Month; });
+  // This dashboard is "as on" the period THIS file describes, so a stored period
+  // LATER than it cannot belong here. Left in, it takes one of the three chart
+  // columns and pushes a real period off the left edge — which is how a May
+  // report kept showing Apr/May/Dec long after the December row that caused it
+  // was fixed: the bad label was already saved, and fixing the derivation does
+  // not unsay it. The row stays in history; it is simply not part of this
+  // report. Mirrored in diagram4/automation.py — change both together.
+  var currentKey = periodSortKey(periodLabel);
+  var laterPeriods = sortedHistory.filter(function (r) { return periodSortKey(r.Month) > currentKey; })
+    .map(function (r) { return r.Month; });
+  var eligibleHistory = sortedHistory.filter(function (r) { return periodSortKey(r.Month) <= currentKey; });
+
+  // Quarter roll-up (reference workflow steps 17-20): history keeps MONTHLY
+  // rows, but a completed quarter displays as ONE column. A quarter is
+  // complete when its ENDING month's row exists (Q2 <- Jun, Q3 <- Sep,
+  // Q4 <- Dec), and the quarter shows that ending month's numbers — a
+  // snapshot, not a sum, because these are cumulative as-on-date values.
+  // Months of an incomplete quarter stay individual, so the display runs
+  // "Q1, Q2, Jul, Aug" until September collapses it to "Q1, Q2, Q3". Q1
+  // needs no month handling: March is stored as "Q1 '26" at derivation
+  // time (getPeriodLabel), as is the seed row.
+  function rollupDisplay(rows) {
+    var QUARTER_OF = { 4: 'Q2', 5: 'Q2', 6: 'Q2', 7: 'Q3', 8: 'Q3', 9: 'Q3', 10: 'Q4', 11: 'Q4', 12: 'Q4' };
+    var QUARTER_END = { 6: 'Q2', 9: 'Q3', 12: 'Q4' };
+    function isMonthLabel(l) { return /^[A-Za-z]{3}/.test(String(l)); }
+    var endingRow = {};
+    rows.forEach(function (r) {
+      if (!isMonthLabel(r.Month)) return;
+      var q = QUARTER_END[periodSortKey(r.Month)];
+      if (q) endingRow[q] = r;
+    });
+    var out = [], emitted = {};
+    rows.forEach(function (r) {
+      var q = isMonthLabel(r.Month) ? QUARTER_OF[periodSortKey(r.Month)] : null;
+      if (q && endingRow[q]) {
+        if (!emitted[q]) { emitted[q] = 1; out.push({ label: q + " '26", row: endingRow[q] }); }
+        return; // month absorbed into its completed quarter
+      }
+      out.push({ label: String(r.Month), row: r });
+    });
+    return out;
+  }
+  var displayHistory = rollupDisplay(eligibleHistory);
+  var graphDisplay = displayHistory.slice(-3);
+  var graphHistory = graphDisplay.map(function (d) { return d.row; });
+  var periodLabels = graphDisplay.map(function (d) { return d.label; });
   var targetForTable = Math.round(totalRisk * TARGET_PERCENT);
 
   var wideColumns = [BASELINE_LABEL].concat(periodLabels, [TARGET_LABEL]);
@@ -399,6 +450,15 @@ window.Reports.s4 = async function s4(wb) {
     yaxis: { visible: false },
     showlegend: false,
     margin: { t: 70, r: 20, b: 50, l: 20 },
+    // Closed % above each period bar, 80% above Target (workflow step 24).
+    // PNG only: the native Excel chart's single series can't carry a second
+    // label set, so there the percents stay in the Percent Label column.
+    annotations: calcLabels.map(function (label, i) {
+      var p = calcPercents[i];
+      if (p === '') return null;
+      return { x: label, y: calcValues[i], text: Math.round(p * 100) + '%', showarrow: false,
+        yanchor: 'bottom', yshift: 2, font: { color: '#ffffff', size: 12 } };
+    }).filter(Boolean),
   };
   var progressChartPng = await B.renderStyledPng(progressTraces, progressLayout, 720, 430);
 
@@ -492,6 +552,21 @@ window.Reports.s4 = async function s4(wb) {
   wsHistUsed.columns.forEach(function (c) { c.width = 16; });
   histPctCells.forEach(function (rc) { wsHistUsed.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
 
+  // Display History (workflow step 23): the rolled-up period list the chart
+  // and matrix actually used — quarters where complete, months elsewhere.
+  var DISPLAY_SHEET = 'Display History';
+  var displayGrid = [['Period', 'Open risk as on date', 'Closed Risk in 2026', 'Total Risk', 'Risk Created in 2026', 'Closed %']]
+    .concat(displayHistory.map(function (d) {
+      return [d.label, d.row['Open risk as on date'], d.row['Closed Risk in 2026'], d.row['Total Risk'], d.row['Risk Created in 2026'], d.row['Closed %']];
+    }));
+  var wsDisplay = workbook.addWorksheet(DISPLAY_SHEET);
+  displayGrid.forEach(function (r) { wsDisplay.addRow(r); });
+  wsDisplay.columns.forEach(function (c) { c.width = 16; });
+  displayGrid.slice(1).forEach(function (_, i) { wsDisplay.getCell(i + 2, 6).numFmt = PCT_FMT; });
+  // Preview copy renders Closed % as "14%"; chartableFromSheet then skips the
+  // now-text column, so the preview chart plots the count series only.
+  var displayGridPreview = renderPercents(displayGrid, displayGrid.slice(1).map(function (_, i) { return [i + 1, 5]; }));
+
   var riskOutputBuf = await workbook.xlsx.writeBuffer();
   if (s4Placements.length) {
     try { riskOutputBuf = window.NativeChartInject.inject(new Uint8Array(riskOutputBuf), s4Placements); }
@@ -532,23 +607,31 @@ window.Reports.s4 = async function s4(wb) {
     // came from and, when a later month was ignored, that the rows exist.
     'Duplicate columns: ' + (dupHeaders.length
       ? dupHeaders.join(', ') + '   (first non-blank value per row is used)' : 'none'),
-    'Reporting period: ' + MONTH_ABBR[chosenMonth - 1] + ' — from the latest ' + YEAR +
-      ' date in ' + dateCreatedCol + ' / ' + dateClosedCol,
-    'Dates by month in file: ' + monthTally.join(', '),
+    'Reporting period: ' + MONTH_ABBR[chosenMonth - 1] + ' — the last month in ' +
+      dateCreatedCol + ' / ' + dateClosedCol + ' holding at least ' + periodFloor + ' rows',
+    'Dates by month in file: ' + monthTally.join(', ') +
+      (skippedMonths.length ? '   — ignored as noise: ' + skippedMonths.join(', ') : ''),
     'Target arithmetic: ' + Math.round(TARGET_PERCENT * 100) + '% of Total Risk (' + openRisk +
       ' open + ' + closedRisk + ' closed = ' + totalRisk + ') = ' + targetValue,
     'History loaded from: ' + historySource,
     'History store: ' + storageNote,
     'Periods held: ' + history.map(function (r) { return r.Month; }).join(', '),
-    'Periods in chart: ' + periodLabels.join(', ') + '  (last 3 of ' + history.length + ')',
+    'Display periods (quarter roll-up): ' + displayHistory.map(function (d) { return d.label; }).join(', '),
+    'Periods in chart: ' + periodLabels.join(', ') + '  (last 3 of ' + displayHistory.length + ' display periods)',
   ];
+  if (laterPeriods.length) {
+    // The "  ^ " prefix is what makes the shell open the Script log by itself —
+    // a period silently dropped from the chart must not go unmentioned.
+    lines.push('  ^ Held but not charted: ' + laterPeriods.join(', ') +
+      '   (later than ' + periodLabel + ', this file\'s period — use Reset to clear them)');
+  }
   var stdout = lines.join('\n');
 
   return {
     ok: true,
     stdout: stdout,
     files: [
-      { name: OUTPUT_FILE, bytes: riskOutputBuf, sheets: [{ name: DASH_SHEET, grid: gPreview }, { name: HIST_USED_SHEET, grid: historyGrid }] },
+      { name: OUTPUT_FILE, bytes: riskOutputBuf, sheets: [{ name: DASH_SHEET, grid: gPreview }, { name: DISPLAY_SHEET, grid: displayGridPreview }, { name: HIST_USED_SHEET, grid: historyGrid }] },
       { name: HISTORY_FILE, bytes: historyBuf, sheets: [{ name: HIST_SHEET, grid: historyGrid }] },
     ],
     chartImages: (function () { var m = {}; m[DASH_SHEET] = progressChartPng; return m; })(),

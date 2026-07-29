@@ -477,11 +477,17 @@ window.ReportEngine = (function () {
       var dashGrid = findRawGrid(files, 'Dashboard');
       special = dashGrid ? d2ChartFromGrid(dashGrid) : null;
     } else if (sid === 's4') {
-      var histFile = files.filter(function (f) { return f.name.toLowerCase() === 'history.xlsx'; })[0];
-      if (histFile) {
-        for (var i = 0; i < histFile.sheets.length; i++) {
-          var cdf = chartableFromSheet(trimSparse(sheetFromGrid(histFile.sheets[i].grid)));
-          if (cdf) { special = cdf; break; }
+      // Prefer the rolled-up "Display History" sheet (matches the dashboard
+      // chart's quarter view); fall back to the full monthly history file.
+      var dispGrid = findRawGrid(files, 'Display History');
+      if (dispGrid) special = chartableFromSheet(trimSparse(sheetFromGrid(dispGrid)));
+      if (!special) {
+        var histFile = files.filter(function (f) { return f.name.toLowerCase() === 'history.xlsx'; })[0];
+        if (histFile) {
+          for (var i = 0; i < histFile.sheets.length; i++) {
+            var cdf = chartableFromSheet(trimSparse(sheetFromGrid(histFile.sheets[i].grid)));
+            if (cdf) { special = cdf; break; }
+          }
         }
       }
     } else if (sid === 's2a') {
