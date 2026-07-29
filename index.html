@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-29.7';
+window.PRP_BUILD = '2026-07-29.8';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -4531,22 +4531,12 @@ function _themeChartConfig(cfg) {
       return Object.assign({}, a, { font:{ family:_CHART_FONT, color:light, size:11 } });
     });
   }
-  const pal = [_FILL[0], _FILL[1]]; // gold, green — the only preview colors
+  const pal = [_FILL[0], _FILL[1]]; // gold, green — series recolored per trace
   const traces = (cfg.traces || []).map(function(tr, ti) {
     const t = Object.assign({}, tr);
-    if (t.marker) {
-      const srcCol = t.marker.color;
-      let col;
-      if (Array.isArray(srcCol)) {
-        const seen = [];
-        col = srcCol.map(function(c) {
-          if (seen.indexOf(c) === -1) seen.push(c);
-          return pal[seen.indexOf(c) % pal.length];
-        });
-      } else {
-        col = pal[ti % pal.length];
-      }
-      t.marker = Object.assign({}, t.marker, { color: col });
+    // Per-bar color arrays (d4: grey ends, gold middles) keep their own colors.
+    if (t.marker && !Array.isArray(t.marker.color)) {
+      t.marker = Object.assign({}, t.marker, { color: pal[ti % pal.length] });
     }
     if (t.textfont) {
       t.textfont = Object.assign({}, t.textfont, {
