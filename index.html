@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-29.6';
+window.PRP_BUILD = '2026-07-29.7';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -4500,10 +4500,11 @@ function buildBar(chartData, title) {
 }
 
 // Re-themes a report's Excel-styled chart config for the in-app preview:
-// the chart's SUBSTANCE (series, values, colors, stacking, bar labels,
-// annotations, axis ranges) is untouched, but the presentation becomes the
-// app's usual chart look — transparent panel background, theme fonts and
-// gridlines — instead of replicating the Excel image's solid styling.
+// the chart's SUBSTANCE (series, values, stacking, bar labels, annotations,
+// axis ranges) is untouched, but the presentation becomes the app's usual
+// chart look — transparent panel background, theme fonts and gridlines, and
+// every series recolored to the app's gold/green palette (the Excel file
+// keeps each chart's original colors).
 function _themeAxis(src, base) {
   if (!src) return base;
   const out = Object.assign({}, base);
@@ -4530,8 +4531,23 @@ function _themeChartConfig(cfg) {
       return Object.assign({}, a, { font:{ family:_CHART_FONT, color:light, size:11 } });
     });
   }
-  const traces = (cfg.traces || []).map(function(tr) {
+  const pal = [_FILL[0], _FILL[1]]; // gold, green — the only preview colors
+  const traces = (cfg.traces || []).map(function(tr, ti) {
     const t = Object.assign({}, tr);
+    if (t.marker) {
+      const srcCol = t.marker.color;
+      let col;
+      if (Array.isArray(srcCol)) {
+        const seen = [];
+        col = srcCol.map(function(c) {
+          if (seen.indexOf(c) === -1) seen.push(c);
+          return pal[seen.indexOf(c) % pal.length];
+        });
+      } else {
+        col = pal[ti % pal.length];
+      }
+      t.marker = Object.assign({}, t.marker, { color: col });
+    }
     if (t.textfont) {
       t.textfont = Object.assign({}, t.textfont, {
         family:_CHART_FONT,
