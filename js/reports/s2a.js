@@ -202,10 +202,10 @@ window.Reports.s2a = async function s2a(wb) {
       traces: [
         { x: zones, y: closedVals, type: 'bar', name: 'Closed', marker: { color: '#2F75B5' },
           text: closedVals.map(function (v) { return v > 0 ? String(v) : ''; }),
-          textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff', size: 9 } },
+          textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none', textfont: { color: '#ffffff', size: 14 } },
         { x: zones, y: openVals, type: 'bar', name: 'Open', marker: { color: '#ED7D31' },
           text: openVals.map(function (v) { return v > 0 ? String(v) : ''; }),
-          textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff', size: 9 } },
+          textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none', textfont: { color: '#ffffff', size: 14 } },
       ],
     };
   }

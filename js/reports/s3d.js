@@ -170,9 +170,9 @@ window.Reports.s3d = async function s3d(wb) {
     var oovOverdue = oovDataRows.map(function (r) { return r[2]; });
     var oovTraces = [
       { x: oovZones, y: oovOpen, type: 'bar', name: 'Open', marker: { color: '#156082' },
-        text: oovOpen.map(String), textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff' } },
+        text: oovOpen.map(String), textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none', textfont: { color: '#ffffff', size: 14 } },
       { x: oovZones, y: oovOverdue, type: 'bar', name: 'Overdue', marker: { color: '#C00000' },
-        text: oovOverdue.map(String), textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff' } },
+        text: oovOverdue.map(String), textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none', textfont: { color: '#ffffff', size: 14 } },
     ];
     chartConfigs['Open vs Overdue'] = { traces: oovTraces, layout: s3dLayout('Open vs Overdue Risks') };
   }
@@ -183,9 +183,9 @@ window.Reports.s3d = async function s3d(wb) {
     var zsOpen = zsDataRows.map(function (r) { return r[2]; });
     var zsTraces = [
       { x: zsZones, y: zsTotal, type: 'bar', name: 'Total Risks', marker: { color: '#156082' },
-        text: zsTotal.map(String), textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff' } },
+        text: zsTotal.map(String), textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none', textfont: { color: '#ffffff', size: 14 } },
       { x: zsZones, y: zsOpen, type: 'bar', name: 'Open Risks', marker: { color: '#F26C23' },
-        text: zsOpen.map(String), textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff' } },
+        text: zsOpen.map(String), textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none', textfont: { color: '#ffffff', size: 14 } },
     ];
     chartConfigs['Zone Summary'] = { traces: zsTraces, layout: s3dLayout('Zone wise Risks') };
   }
