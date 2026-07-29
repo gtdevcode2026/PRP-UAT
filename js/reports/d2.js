@@ -122,10 +122,10 @@ window.Reports.d2 = async function d2(wb) {
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
 
-  // Both embedded charts reproduce the original matplotlib styles instead
-  // of the light in-page preview theme. Both are embedded into the file
-  // (matching today's 2-chart output), even though only the KPI chart ever
-  // surfaces in the preview — confirmed with the user.
+  // Both charts reproduce the original matplotlib styles. The PNG renders
+  // below are embedded into the .xlsx (matching today's 2-chart output);
+  // the SAME traces/layouts also drive the live Plotly "Chart preview"
+  // (chartConfigs in the return), so preview and file always match.
   var images = {};
 
   // Chart 1: org-level stacked bar — black bg, Open (cyan) bottom + Closed
@@ -193,6 +193,11 @@ window.Reports.d2 = async function d2(wb) {
   return {
     ok: true,
     files: [{ name: 'output file D2.xlsx', bytes: buf, sheets: [{ name: 'Dashboard', grid: grid }] }],
-    chartImages: { 'Dashboard': images.org },
+    chartConfigs: {
+      'Dashboard': [
+        { traces: orgTraces, layout: orgLayout },
+        { traces: kpiTraces, layout: kpiLayout },
+      ],
+    },
   };
 };

@@ -106,10 +106,9 @@ window.Reports.s1c = async function s1c(wb) {
     zoneRows.map(function (r) { return r[0]; }), zoneRows.map(function (r) { return r[1]; }),
     'Active by Zone', 'Zone', 'Count'
   );
-  var images = {
-    'Summary': await B.renderStyledPng(chart1.traces, chart1.layout, 480, 280),
-    'Active by Zone': await B.renderStyledPng(chart2.traces, chart2.layout, 480, 280),
-  };
+  // Live Plotly previews of the same styled charts (no baked images) —
+  // preview and the native Excel charts always match.
+  var chartConfigs = { 'Summary': chart1, 'Active by Zone': chart2 };
 
   var workbook = new ExcelJS.Workbook();
   function writeSheet(name, grid) {
@@ -167,6 +166,6 @@ window.Reports.s1c = async function s1c(wb) {
         { name: 'Active by Zone', grid: zoneActiveGrid },
       ],
     }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };

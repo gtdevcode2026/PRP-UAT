@@ -226,17 +226,19 @@ window.Reports.s2a = async function s2a(wb) {
       margin: { t: 60, r: 20, b: 90, l: 60 },
     };
   }
-  var images = {};
+  // Live Plotly previews of the same styled charts (no baked images) —
+  // preview and the native Excel charts always match.
+  var chartConfigs = {};
   var oc = s2aChartTraces(zoneSummary);
-  images['Auto Open Closed'] = await B.renderStyledPng(
-    oc.traces, s2aLayout(totalOpen + '/' + totalAll + ' Open Assessment', 'Assessment Count', oc.zones, oc.totals), 720, 380
-  );
+  chartConfigs['Auto Open Closed'] = {
+    traces: oc.traces,
+    layout: s2aLayout(totalOpen + '/' + totalAll + ' Open Assessment', 'Assessment Count', oc.zones, oc.totals),
+  };
   var od = s2aChartTraces(overdueZone);
-  images[sheetName3] = await B.renderStyledPng(
-    od.traces,
-    s2aLayout(totalOverdueOpen + '/' + totalOverdue + ' Overdue Open Assessment (' + OVERDUE_THRESHOLD + '+ days)', 'Overdue Assessment Count', od.zones, od.totals),
-    720, 380
-  );
+  chartConfigs[sheetName3] = {
+    traces: od.traces,
+    layout: s2aLayout(totalOverdueOpen + '/' + totalOverdue + ' Overdue Open Assessment (' + OVERDUE_THRESHOLD + '+ days)', 'Overdue Assessment Count', od.zones, od.totals),
+  };
 
   var workbook = new ExcelJS.Workbook();
   function writeSheet(name, grid) {
@@ -297,6 +299,6 @@ window.Reports.s2a = async function s2a(wb) {
         { name: sheetName3, grid: g3 },
       ],
     }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };

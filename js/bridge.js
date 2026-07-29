@@ -63,7 +63,10 @@ window.ReportBridge = (function () {
   function buildPayload(sid, result) {
     var processed = E.processSheets(sid, result.files);
     var charts = E.selectCharts(sid, processed, result.files);
-    var chartImages = result.chartImages || {};
+    // Styled Plotly configs from the report itself — the exact traces/layout
+    // of the chart embedded in the Excel output. The preview renders these
+    // live; the generic auto-derived chart is only a fallback.
+    var chartConfigs = result.chartConfigs || {};
 
     var sheetsOut = processed.map(function (p, i) {
       return {
@@ -74,7 +77,7 @@ window.ReportBridge = (function () {
         headers: p.sheet.headers,
         preview: E.previewRows(p.sheet, 50),
         chart: charts[i],
-        chartImageUrl: chartImages[p.name] || null,
+        chartConfig: chartConfigs[p.name] || null,
       };
     });
 

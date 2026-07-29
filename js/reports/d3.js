@@ -89,7 +89,7 @@ window.Reports.d3 = async function d3(wb) {
   // max_row=ws.max_row-1) which excludes both. Deviation from the Python
   // chart: white in-bar value labels (zeros hidden), same as d2/s3d.
   var D3_COLORS = { 'Completed in 2026': '#FF0000', 'Pending': '#FFC000' };
-  var images = {};
+  var chartConfigs = {};
   if (pivot.indexVals.length) {
     var d3Traces = W1_COLUMNS.map(function (colName, idx) {
       var vals = baseRows.map(function (r) { return r[idx]; });
@@ -109,7 +109,8 @@ window.Reports.d3 = async function d3(wb) {
       legend: { font: { color: '#000000' } },
       margin: { t: 50, r: 20, b: 60, l: 50 },
     };
-    images['Summary'] = await B.renderStyledPng(d3Traces, d3Layout, 480, 280);
+    // Live Plotly preview of the same styled chart (no baked image).
+    chartConfigs['Summary'] = { traces: d3Traces, layout: d3Layout };
   }
 
   var workbook = new ExcelJS.Workbook();
@@ -153,6 +154,6 @@ window.Reports.d3 = async function d3(wb) {
   return {
     ok: true,
     files: [{ name: 'output.xlsx', bytes: buf, sheets: [{ name: 'Summary', grid: grid }] }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };

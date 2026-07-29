@@ -47,9 +47,11 @@ window.Reports.d1 = async function d1(wb) {
   var grid = [headers].concat(finalRows);
   var files = [{ name: 'PRP_Output.xlsx', sheets: [{ name: 'Final Table', grid: grid }] }];
 
-  // Embedded chart reproduces the original matplotlib style exactly (black
+  // Styled chart reproduces the original matplotlib style exactly (black
   // figure, blue/orange stacked bars, white in-bar value labels, bold white
-  // title with the running total) — NOT the light in-page preview theme.
+  // title with the running total). The SAME config drives the live Plotly
+  // "Chart preview" (via chartConfigs below) and mirrors the native Excel
+  // chart injected into the workbook — preview and file always match.
   var zones = chartRows.map(function (r) { return r[0]; });
   var tier1Vals = chartRows.map(function (r) { return r[1]; });
   var addedVals = chartRows.map(function (r) { return r[2]; });
@@ -77,7 +79,7 @@ window.Reports.d1 = async function d1(wb) {
     legend: { bgcolor: '#000000', font: { color: '#ffffff' } },
     margin: { t: 60, r: 20, b: 50, l: 50 },
   };
-  var images = { 'Final Table': await B.renderStyledPng(d1Traces, d1Layout, 700, 420) };
+  var chartConfigs = { 'Final Table': { traces: d1Traces, layout: d1Layout } };
 
   var workbook = new ExcelJS.Workbook();
   var ws = workbook.addWorksheet('Final Table');
@@ -119,6 +121,6 @@ window.Reports.d1 = async function d1(wb) {
   return {
     ok: true,
     files: [{ name: 'PRP_Output.xlsx', bytes: buf, sheets: [{ name: 'Final Table', grid: grid }] }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };

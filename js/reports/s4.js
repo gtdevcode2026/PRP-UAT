@@ -600,6 +600,34 @@ window.Reports.s4 = async function s4(wb) {
   }
   var stdout = lines.join('\n');
 
+  // Live Plotly preview of the exact chart embedded in Risk_Output.xlsx:
+  // single series, gray Baseline/Target end-bars, gold period bars, white
+  // centered value labels, Closed % above each bar, black chart area.
+  var s4BarColors = calcLabels.map(function (_, i) {
+    return (i === 0 || i === calcLabels.length - 1) ? '#BFBFBF' : '#FFC000';
+  });
+  var progressConfig = {
+    traces: [
+      { x: calcLabels, y: calcValues, type: 'bar', marker: { color: s4BarColors },
+        text: calcValues.map(String), textposition: 'inside', insidetextanchor: 'middle', textangle: 0,
+        textfont: { color: '#ffffff', size: 12 } },
+    ],
+    layout: {
+      paper_bgcolor: '#000000', plot_bgcolor: '#000000',
+      title: { text: "<b>Cumulative Risk Treatment<br>Progress</b>", font: { color: '#ffffff', size: 18 } },
+      xaxis: { tickfont: { color: '#ffffff' }, linecolor: '#ffffff', showline: true },
+      yaxis: { visible: false },
+      showlegend: false,
+      margin: { t: 70, r: 20, b: 50, l: 20 },
+      annotations: calcLabels.map(function (label, i) {
+        var p = calcPercents[i];
+        if (p === '') return null;
+        return { x: label, y: calcValues[i], text: Math.round(p * 100) + '%', showarrow: false,
+          yanchor: 'bottom', yshift: 2, font: { color: '#ffffff', size: 12 } };
+      }).filter(Boolean),
+    },
+  };
+
   return {
     ok: true,
     stdout: stdout,
@@ -607,5 +635,6 @@ window.Reports.s4 = async function s4(wb) {
       { name: OUTPUT_FILE, bytes: riskOutputBuf, sheets: [{ name: DASH_SHEET, grid: gPreview }, { name: DISPLAY_SHEET, grid: displayGridPreview }, { name: HIST_USED_SHEET, grid: historyGrid }] },
       { name: HISTORY_FILE, bytes: historyBuf, sheets: [{ name: HIST_SHEET, grid: historyGrid }] },
     ],
+    chartConfigs: (function () { var m = {}; m[DASH_SHEET] = progressConfig; return m; })(),
   };
 };

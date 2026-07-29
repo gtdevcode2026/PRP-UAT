@@ -160,7 +160,9 @@ window.Reports.s3d = async function s3d(wb) {
       margin: { t: 50, r: 20, b: 70, l: 50 },
     };
   }
-  var images = {};
+  // Live Plotly previews of the same styled charts (no baked images) —
+  // preview and the native Excel charts always match.
+  var chartConfigs = {};
   var oovDataRows = openVsOverdueGrid.slice(1);
   if (oovDataRows.length) {
     var oovZones = oovDataRows.map(function (r) { return r[0]; });
@@ -172,7 +174,7 @@ window.Reports.s3d = async function s3d(wb) {
       { x: oovZones, y: oovOverdue, type: 'bar', name: 'Overdue', marker: { color: '#C00000' },
         text: oovOverdue.map(String), textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff' } },
     ];
-    images['Open vs Overdue'] = await B.renderStyledPng(oovTraces, s3dLayout('Open vs Overdue Risks'), 720, 420);
+    chartConfigs['Open vs Overdue'] = { traces: oovTraces, layout: s3dLayout('Open vs Overdue Risks') };
   }
   var zsDataRows = zoneSummaryGrid.slice(1);
   if (zsDataRows.length) {
@@ -185,7 +187,7 @@ window.Reports.s3d = async function s3d(wb) {
       { x: zsZones, y: zsOpen, type: 'bar', name: 'Open Risks', marker: { color: '#F26C23' },
         text: zsOpen.map(String), textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff' } },
     ];
-    images['Zone Summary'] = await B.renderStyledPng(zsTraces, s3dLayout('Zone wise Risks'), 720, 420);
+    chartConfigs['Zone Summary'] = { traces: zsTraces, layout: s3dLayout('Zone wise Risks') };
   }
 
   var workbook = new ExcelJS.Workbook();
@@ -206,7 +208,7 @@ window.Reports.s3d = async function s3d(wb) {
   var buf = await workbook.xlsx.writeBuffer();
 
   var placements = [];
-  if (images['Open vs Overdue']) {
+  if (oovDataRows.length) {
     var oovLast = oovDataRows.length + 1;
     placements.push({
       sheetName: 'Open vs Overdue',
@@ -225,7 +227,7 @@ window.Reports.s3d = async function s3d(wb) {
       },
     });
   }
-  if (images['Zone Summary']) {
+  if (zsDataRows.length) {
     var zsLast = zsDataRows.length + 1;
     placements.push({
       sheetName: 'Zone Summary',
@@ -260,6 +262,6 @@ window.Reports.s3d = async function s3d(wb) {
         { name: 'Zone Summary', grid: zoneSummaryGrid },
       ],
     }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };

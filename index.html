@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-29.3';
+window.PRP_BUILD = '2026-07-29.4';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -1368,9 +1368,12 @@ window.ReportBridge = (function () {
   function buildPayload(sid, result) {
     var processed = E.processSheets(sid, result.files);
     var charts = E.selectCharts(sid, processed, result.files);
-    var chartImages = result.chartImages || {};
+    // Styled Plotly configs from the report itself — the exact traces/layout
+    // of the chart embedded in the Excel output. The preview renders these
+    // live; the generic auto-derived chart is only a fallback.
+    var chartConfigs = result.chartConfigs || {};
     var sheetsOut = processed.map(function (p, i) {
-      return { file: p.file, name: p.name, rows: p.sheet.rows.length, cols: p.sheet.headers.length, headers: p.sheet.headers, preview: E.previewRows(p.sheet, 50), chart: charts[i], chartImageUrl: chartImages[p.name] || null };
+      return { file: p.file, name: p.name, rows: p.sheet.rows.length, cols: p.sheet.headers.length, headers: p.sheet.headers, preview: E.previewRows(p.sheet, 50), chart: charts[i], chartConfig: chartConfigs[p.name] || null };
     });
     return {
       ok: !!result.ok, returncode: result.ok ? 0 : 1, stdout: result.stdout || '', stderr: result.stderr || '',
@@ -2178,9 +2181,11 @@ window.Reports.d1 = async function d1(wb) {
   var grid = [headers].concat(finalRows);
   var files = [{ name: 'PRP_Output.xlsx', sheets: [{ name: 'Final Table', grid: grid }] }];
 
-  // Embedded chart reproduces the original matplotlib style exactly (black
+  // Styled chart reproduces the original matplotlib style exactly (black
   // figure, blue/orange stacked bars, white in-bar value labels, bold white
-  // title with the running total) — NOT the light in-page preview theme.
+  // title with the running total). The SAME config drives the live Plotly
+  // "Chart preview" (via chartConfigs below) and mirrors the native Excel
+  // chart injected into the workbook — preview and file always match.
   var zones = chartRows.map(function (r) { return r[0]; });
   var tier1Vals = chartRows.map(function (r) { return r[1]; });
   var addedVals = chartRows.map(function (r) { return r[2]; });
@@ -2208,7 +2213,7 @@ window.Reports.d1 = async function d1(wb) {
     legend: { bgcolor: '#000000', font: { color: '#ffffff' } },
     margin: { t: 60, r: 20, b: 50, l: 50 },
   };
-  var images = { 'Final Table': await B.renderStyledPng(d1Traces, d1Layout, 700, 420) };
+  var chartConfigs = { 'Final Table': { traces: d1Traces, layout: d1Layout } };
 
   var workbook = new ExcelJS.Workbook();
   var ws = workbook.addWorksheet('Final Table');
@@ -2250,7 +2255,7 @@ window.Reports.d1 = async function d1(wb) {
   return {
     ok: true,
     files: [{ name: 'PRP_Output.xlsx', bytes: buf, sheets: [{ name: 'Final Table', grid: grid }] }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };
 
@@ -2378,10 +2383,10 @@ window.Reports.d2 = async function d2(wb) {
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
 
-  // Both embedded charts reproduce the original matplotlib styles instead
-  // of the light in-page preview theme. Both are embedded into the file
-  // (matching today's 2-chart output), even though only the KPI chart ever
-  // surfaces in the preview — confirmed with the user.
+  // Both charts reproduce the original matplotlib styles. The PNG renders
+  // below are embedded into the .xlsx (matching today's 2-chart output);
+  // the SAME traces/layouts also drive the live Plotly "Chart preview"
+  // (chartConfigs in the return), so preview and file always match.
   var images = {};
 
   // Chart 1: org-level stacked bar — black bg, Open (cyan) bottom + Closed
@@ -2449,7 +2454,12 @@ window.Reports.d2 = async function d2(wb) {
   return {
     ok: true,
     files: [{ name: 'output file D2.xlsx', bytes: buf, sheets: [{ name: 'Dashboard', grid: grid }] }],
-    chartImages: { 'Dashboard': images.org },
+    chartConfigs: {
+      'Dashboard': [
+        { traces: orgTraces, layout: orgLayout },
+        { traces: kpiTraces, layout: kpiLayout },
+      ],
+    },
   };
 };
 
@@ -2536,7 +2546,7 @@ window.Reports.d3 = async function d3(wb) {
   // max_row=ws.max_row-1) which excludes both. Deviation from the Python
   // chart: white in-bar value labels (zeros hidden), same as d2/s3d.
   var D3_COLORS = { 'Completed in 2026': '#FF0000', 'Pending': '#FFC000' };
-  var images = {};
+  var chartConfigs = {};
   if (pivot.indexVals.length) {
     var d3Traces = W1_COLUMNS.map(function (colName, idx) {
       var vals = baseRows.map(function (r) { return r[idx]; });
@@ -2556,7 +2566,8 @@ window.Reports.d3 = async function d3(wb) {
       legend: { font: { color: '#000000' } },
       margin: { t: 50, r: 20, b: 60, l: 50 },
     };
-    images['Summary'] = await B.renderStyledPng(d3Traces, d3Layout, 480, 280);
+    // Live Plotly preview of the same styled chart (no baked image).
+    chartConfigs['Summary'] = { traces: d3Traces, layout: d3Layout };
   }
 
   var workbook = new ExcelJS.Workbook();
@@ -2600,7 +2611,7 @@ window.Reports.d3 = async function d3(wb) {
   return {
     ok: true,
     files: [{ name: 'output.xlsx', bytes: buf, sheets: [{ name: 'Summary', grid: grid }] }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };
 
@@ -2707,10 +2718,9 @@ window.Reports.s1c = async function s1c(wb) {
     zoneRows.map(function (r) { return r[0]; }), zoneRows.map(function (r) { return r[1]; }),
     'Active by Zone', 'Zone', 'Count'
   );
-  var images = {
-    'Summary': await B.renderStyledPng(chart1.traces, chart1.layout, 480, 280),
-    'Active by Zone': await B.renderStyledPng(chart2.traces, chart2.layout, 480, 280),
-  };
+  // Live Plotly previews of the same styled charts (no baked images) —
+  // preview and the native Excel charts always match.
+  var chartConfigs = { 'Summary': chart1, 'Active by Zone': chart2 };
 
   var workbook = new ExcelJS.Workbook();
   function writeSheet(name, grid) {
@@ -2768,7 +2778,7 @@ window.Reports.s1c = async function s1c(wb) {
         { name: 'Active by Zone', grid: zoneActiveGrid },
       ],
     }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };
 
@@ -2991,17 +3001,19 @@ window.Reports.s2a = async function s2a(wb) {
       margin: { t: 60, r: 20, b: 90, l: 60 },
     };
   }
-  var images = {};
+  // Live Plotly previews of the same styled charts (no baked images) —
+  // preview and the native Excel charts always match.
+  var chartConfigs = {};
   var oc = s2aChartTraces(zoneSummary);
-  images['Auto Open Closed'] = await B.renderStyledPng(
-    oc.traces, s2aLayout(totalOpen + '/' + totalAll + ' Open Assessment', 'Assessment Count', oc.zones, oc.totals), 720, 380
-  );
+  chartConfigs['Auto Open Closed'] = {
+    traces: oc.traces,
+    layout: s2aLayout(totalOpen + '/' + totalAll + ' Open Assessment', 'Assessment Count', oc.zones, oc.totals),
+  };
   var od = s2aChartTraces(overdueZone);
-  images[sheetName3] = await B.renderStyledPng(
-    od.traces,
-    s2aLayout(totalOverdueOpen + '/' + totalOverdue + ' Overdue Open Assessment (' + OVERDUE_THRESHOLD + '+ days)', 'Overdue Assessment Count', od.zones, od.totals),
-    720, 380
-  );
+  chartConfigs[sheetName3] = {
+    traces: od.traces,
+    layout: s2aLayout(totalOverdueOpen + '/' + totalOverdue + ' Overdue Open Assessment (' + OVERDUE_THRESHOLD + '+ days)', 'Overdue Assessment Count', od.zones, od.totals),
+  };
 
   var workbook = new ExcelJS.Workbook();
   function writeSheet(name, grid) {
@@ -3062,7 +3074,7 @@ window.Reports.s2a = async function s2a(wb) {
         { name: sheetName3, grid: g3 },
       ],
     }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };
 
@@ -3218,7 +3230,9 @@ window.Reports.s3d = async function s3d(wb) {
       margin: { t: 50, r: 20, b: 70, l: 50 },
     };
   }
-  var images = {};
+  // Live Plotly previews of the same styled charts (no baked images) —
+  // preview and the native Excel charts always match.
+  var chartConfigs = {};
   var oovDataRows = openVsOverdueGrid.slice(1);
   if (oovDataRows.length) {
     var oovZones = oovDataRows.map(function (r) { return r[0]; });
@@ -3230,7 +3244,7 @@ window.Reports.s3d = async function s3d(wb) {
       { x: oovZones, y: oovOverdue, type: 'bar', name: 'Overdue', marker: { color: '#C00000' },
         text: oovOverdue.map(String), textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff' } },
     ];
-    images['Open vs Overdue'] = await B.renderStyledPng(oovTraces, s3dLayout('Open vs Overdue Risks'), 720, 420);
+    chartConfigs['Open vs Overdue'] = { traces: oovTraces, layout: s3dLayout('Open vs Overdue Risks') };
   }
   var zsDataRows = zoneSummaryGrid.slice(1);
   if (zsDataRows.length) {
@@ -3243,7 +3257,7 @@ window.Reports.s3d = async function s3d(wb) {
       { x: zsZones, y: zsOpen, type: 'bar', name: 'Open Risks', marker: { color: '#F26C23' },
         text: zsOpen.map(String), textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff' } },
     ];
-    images['Zone Summary'] = await B.renderStyledPng(zsTraces, s3dLayout('Zone wise Risks'), 720, 420);
+    chartConfigs['Zone Summary'] = { traces: zsTraces, layout: s3dLayout('Zone wise Risks') };
   }
 
   var workbook = new ExcelJS.Workbook();
@@ -3264,7 +3278,7 @@ window.Reports.s3d = async function s3d(wb) {
   var buf = await workbook.xlsx.writeBuffer();
 
   var placements = [];
-  if (images['Open vs Overdue']) {
+  if (oovDataRows.length) {
     var oovLast = oovDataRows.length + 1;
     placements.push({
       sheetName: 'Open vs Overdue',
@@ -3283,7 +3297,7 @@ window.Reports.s3d = async function s3d(wb) {
       },
     });
   }
-  if (images['Zone Summary']) {
+  if (zsDataRows.length) {
     var zsLast = zsDataRows.length + 1;
     placements.push({
       sheetName: 'Zone Summary',
@@ -3318,7 +3332,7 @@ window.Reports.s3d = async function s3d(wb) {
         { name: 'Zone Summary', grid: zoneSummaryGrid },
       ],
     }],
-    chartImages: images,
+    chartConfigs: chartConfigs,
   };
 };
 
@@ -3903,6 +3917,34 @@ window.Reports.s4 = async function s4(wb) {
   }
   var stdout = lines.join('\n');
 
+  // Live Plotly preview of the exact chart embedded in Risk_Output.xlsx:
+  // single series, gray Baseline/Target end-bars, gold period bars, white
+  // centered value labels, Closed % above each bar, black chart area.
+  var s4BarColors = calcLabels.map(function (_, i) {
+    return (i === 0 || i === calcLabels.length - 1) ? '#BFBFBF' : '#FFC000';
+  });
+  var progressConfig = {
+    traces: [
+      { x: calcLabels, y: calcValues, type: 'bar', marker: { color: s4BarColors },
+        text: calcValues.map(String), textposition: 'inside', insidetextanchor: 'middle', textangle: 0,
+        textfont: { color: '#ffffff', size: 12 } },
+    ],
+    layout: {
+      paper_bgcolor: '#000000', plot_bgcolor: '#000000',
+      title: { text: "<b>Cumulative Risk Treatment<br>Progress</b>", font: { color: '#ffffff', size: 18 } },
+      xaxis: { tickfont: { color: '#ffffff' }, linecolor: '#ffffff', showline: true },
+      yaxis: { visible: false },
+      showlegend: false,
+      margin: { t: 70, r: 20, b: 50, l: 20 },
+      annotations: calcLabels.map(function (label, i) {
+        var p = calcPercents[i];
+        if (p === '') return null;
+        return { x: label, y: calcValues[i], text: Math.round(p * 100) + '%', showarrow: false,
+          yanchor: 'bottom', yshift: 2, font: { color: '#ffffff', size: 12 } };
+      }).filter(Boolean),
+    },
+  };
+
   return {
     ok: true,
     stdout: stdout,
@@ -3910,6 +3952,7 @@ window.Reports.s4 = async function s4(wb) {
       { name: OUTPUT_FILE, bytes: riskOutputBuf, sheets: [{ name: DASH_SHEET, grid: gPreview }, { name: DISPLAY_SHEET, grid: displayGridPreview }, { name: HIST_USED_SHEET, grid: historyGrid }] },
       { name: HISTORY_FILE, bytes: historyBuf, sheets: [{ name: HIST_SHEET, grid: historyGrid }] },
     ],
+    chartConfigs: (function () { var m = {}; m[DASH_SHEET] = progressConfig; return m; })(),
   };
 };
 
@@ -4257,7 +4300,7 @@ function renderResults() {
       '<div class="panel-head"><span class="panel-title">' + esc(sheet.name) + '</span></div>' +
       tableHtml(sheet.headers, sheet.preview, sheet.rows) +
       '</div>';
-    if (sheet.chart) {
+    if (sheet.chartConfig || sheet.chart) {
       html += '<div class="sheet-stack">' +
               '<div class="panel glass ring">' +
               '<div class="panel-head"><span class="panel-title">Chart preview</span></div>' +
@@ -4378,11 +4421,25 @@ function renderResults() {
     });
   }
 
-  // Render Plotly charts for browser preview
+  // Render Plotly charts for browser preview. A sheet with a chartConfig
+  // renders the report's own styled traces/layout LIVE — the exact chart
+  // that lands in the Excel output (one or several per sheet, stacked).
+  // Sheets without one fall back to the generic auto-derived chart.
   d.sheets.forEach(function(sheet, si) {
-    if (!sheet.chart) return;
     const el = document.getElementById('chart-' + si);
     if (!el) return;
+    if (sheet.chartConfig) {
+      const configs = Array.isArray(sheet.chartConfig) ? sheet.chartConfig : [sheet.chartConfig];
+      configs.forEach(function(cfg) {
+        const box = document.createElement('div');
+        box.style.minHeight = configs.length > 1 ? '380px' : 'inherit';
+        if (configs.length === 1) box.style.height = '100%';
+        el.appendChild(box);
+        Plotly.newPlot(box, cfg.traces, cfg.layout, { displayModeBar: false, responsive: true });
+      });
+      return;
+    }
+    if (!sheet.chart) return;
     const cfg = sheet.chart.type === 'hbar'
       ? buildHBar(sheet.chart, 'Improve in Supplier Response Time')
       : buildBar(sheet.chart, null);
