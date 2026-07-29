@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-29.4';
+window.PRP_BUILD = '2026-07-29.5';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -4435,7 +4435,8 @@ function renderResults() {
         box.style.minHeight = configs.length > 1 ? '380px' : 'inherit';
         if (configs.length === 1) box.style.height = '100%';
         el.appendChild(box);
-        Plotly.newPlot(box, cfg.traces, cfg.layout, { displayModeBar: false, responsive: true });
+        const themed = _themeChartConfig(cfg);
+        Plotly.newPlot(box, themed.traces, themed.layout, { displayModeBar: false, responsive: true });
       });
       return;
     }
@@ -4500,6 +4501,50 @@ function buildBar(chartData, title) {
     };
   });
   const layout = Object.assign(_baseLayout(title), { barmode: chartData.stacked ? "stack" : "group", bargap:0.22, bargroupgap:0.06 });
+  return { traces, layout };
+}
+
+// Re-themes a report's Excel-styled chart config for the in-app preview:
+// the chart's SUBSTANCE (series, values, colors, stacking, bar labels,
+// annotations, axis ranges) is untouched, but the presentation becomes the
+// app's usual chart look — transparent panel background, theme fonts and
+// gridlines — instead of replicating the Excel image's solid styling.
+function _themeAxis(src, base) {
+  if (!src) return base;
+  const out = Object.assign({}, base);
+  ["range","tickvals","ticktext","tickformat","autorange","visible","tickangle","type"].forEach(function(k) {
+    if (src[k] !== undefined) out[k] = src[k];
+  });
+  const t = src.title && (src.title.text !== undefined ? src.title.text : (typeof src.title === "string" ? src.title : null));
+  if (t) out.title = { text:t, font:{ family:_CHART_FONT, color:"#B3A67E", size:10.5 } };
+  return out;
+}
+function _themeChartConfig(cfg) {
+  const light = "#E8DDBB";
+  const src = cfg.layout || {};
+  const titleText = src.title && src.title.text
+    ? String(src.title.text).replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "") : null;
+  const base = _baseLayout(titleText);
+  const layout = Object.assign({}, base, { bargap:0.22, bargroupgap:0.06 });
+  if (src.barmode) layout.barmode = src.barmode;
+  if (src.showlegend !== undefined) layout.showlegend = src.showlegend;
+  layout.xaxis = _themeAxis(src.xaxis, base.xaxis);
+  layout.yaxis = _themeAxis(src.yaxis, base.yaxis);
+  if (src.annotations) {
+    layout.annotations = src.annotations.map(function(a) {
+      return Object.assign({}, a, { font:{ family:_CHART_FONT, color:light, size:11 } });
+    });
+  }
+  const traces = (cfg.traces || []).map(function(tr) {
+    const t = Object.assign({}, tr);
+    if (t.textfont) {
+      t.textfont = Object.assign({}, t.textfont, {
+        family:_CHART_FONT,
+        color: t.textposition === "inside" ? "#ffffff" : light,
+      });
+    }
+    return t;
+  });
   return { traces, layout };
 }
 
