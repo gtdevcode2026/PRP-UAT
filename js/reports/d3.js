@@ -97,7 +97,10 @@ window.Reports.d3 = async function d3(wb) {
         x: pivot.indexVals, y: vals,
         type: 'bar', name: colName, marker: { color: D3_COLORS[colName] || '#4472C4' },
         text: vals.map(function (v) { return v > 0 ? String(v) : ''; }),
-        textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff', size: 10 },
+        textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff', size: 14 },
+        // Keep every value upright and full-size: without these Plotly
+        // rotates/shrinks labels to fit the smaller bars.
+        textangle: 0, constraintext: 'none',
       };
     });
     var d3Layout = {

@@ -876,7 +876,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-29.9';
+window.PRP_BUILD = '2026-07-29.10';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -2604,7 +2604,10 @@ window.Reports.d3 = async function d3(wb) {
         x: pivot.indexVals, y: vals,
         type: 'bar', name: colName, marker: { color: D3_COLORS[colName] || '#4472C4' },
         text: vals.map(function (v) { return v > 0 ? String(v) : ''; }),
-        textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff', size: 10 },
+        textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff', size: 14 },
+        // Keep every value upright and full-size: without these Plotly
+        // rotates/shrinks labels to fit the smaller bars.
+        textangle: 0, constraintext: 'none',
       };
     });
     var d3Layout = {
