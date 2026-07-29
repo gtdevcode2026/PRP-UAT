@@ -226,18 +226,14 @@ window.Reports.s2a = async function s2a(wb) {
       margin: { t: 60, r: 20, b: 90, l: 60 },
     };
   }
-  // Live Plotly previews of the same styled charts (no baked images) —
-  // preview and the native Excel charts always match.
+  // Live Plotly preview of the same styled chart (no baked image). Only the
+  // 'Auto Open Closed' sheet previews a chart — matching what the preview
+  // always showed; the Overdue sheet's chart lives in the Excel file only.
   var chartConfigs = {};
   var oc = s2aChartTraces(zoneSummary);
   chartConfigs['Auto Open Closed'] = {
     traces: oc.traces,
     layout: s2aLayout(totalOpen + '/' + totalAll + ' Open Assessment', 'Assessment Count', oc.zones, oc.totals),
-  };
-  var od = s2aChartTraces(overdueZone);
-  chartConfigs[sheetName3] = {
-    traces: od.traces,
-    layout: s2aLayout(totalOverdueOpen + '/' + totalOverdue + ' Overdue Open Assessment (' + OVERDUE_THRESHOLD + '+ days)', 'Overdue Assessment Count', od.zones, od.totals),
   };
 
   var workbook = new ExcelJS.Workbook();

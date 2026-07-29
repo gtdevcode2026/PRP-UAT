@@ -193,11 +193,10 @@ window.Reports.d2 = async function d2(wb) {
   return {
     ok: true,
     files: [{ name: 'output file D2.xlsx', bytes: buf, sheets: [{ name: 'Dashboard', grid: grid }] }],
+    // Preview shows the KPI chart only — matching what the preview always
+    // showed; the org chart is still embedded in the Excel Dashboard.
     chartConfigs: {
-      'Dashboard': [
-        { traces: orgTraces, layout: orgLayout },
-        { traces: kpiTraces, layout: kpiLayout },
-      ],
+      'Dashboard': { traces: kpiTraces, layout: kpiLayout },
     },
   };
 };

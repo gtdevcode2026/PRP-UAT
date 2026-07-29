@@ -860,7 +860,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-29.5';
+window.PRP_BUILD = '2026-07-29.6';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -2454,11 +2454,10 @@ window.Reports.d2 = async function d2(wb) {
   return {
     ok: true,
     files: [{ name: 'output file D2.xlsx', bytes: buf, sheets: [{ name: 'Dashboard', grid: grid }] }],
+    // Preview shows the KPI chart only — matching what the preview always
+    // showed; the org chart is still embedded in the Excel Dashboard.
     chartConfigs: {
-      'Dashboard': [
-        { traces: orgTraces, layout: orgLayout },
-        { traces: kpiTraces, layout: kpiLayout },
-      ],
+      'Dashboard': { traces: kpiTraces, layout: kpiLayout },
     },
   };
 };
@@ -3001,18 +3000,14 @@ window.Reports.s2a = async function s2a(wb) {
       margin: { t: 60, r: 20, b: 90, l: 60 },
     };
   }
-  // Live Plotly previews of the same styled charts (no baked images) —
-  // preview and the native Excel charts always match.
+  // Live Plotly preview of the same styled chart (no baked image). Only the
+  // 'Auto Open Closed' sheet previews a chart — matching what the preview
+  // always showed; the Overdue sheet's chart lives in the Excel file only.
   var chartConfigs = {};
   var oc = s2aChartTraces(zoneSummary);
   chartConfigs['Auto Open Closed'] = {
     traces: oc.traces,
     layout: s2aLayout(totalOpen + '/' + totalAll + ' Open Assessment', 'Assessment Count', oc.zones, oc.totals),
-  };
-  var od = s2aChartTraces(overdueZone);
-  chartConfigs[sheetName3] = {
-    traces: od.traces,
-    layout: s2aLayout(totalOverdueOpen + '/' + totalOverdue + ' Overdue Open Assessment (' + OVERDUE_THRESHOLD + '+ days)', 'Overdue Assessment Count', od.zones, od.totals),
   };
 
   var workbook = new ExcelJS.Workbook();
