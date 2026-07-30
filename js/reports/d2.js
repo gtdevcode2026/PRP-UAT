@@ -138,10 +138,10 @@ window.Reports.d2 = async function d2(wb, opts) {
   // localStorage, and reused untouched on every later run whatever workbook
   // or filter is loaded - only the CURRENT month stays live. Finished
   // quarters lock the same way as the average of their three locked months
-  // (Q1 '26 is fixed at 32% in code). Clearing site data - or e.g.
+  // (Q1 '26 fixed at 32% and Q2 '26 at 66% in code). Clearing site data - or e.g.
   // localStorage.removeItem('PRP_D2_KPI_Jul_26') in the console - re-arms
   // the one-time computation for that period.
-  var STATIC_Q = { 1: 0.32 };
+  var STATIC_Q = { 1: 0.32, 2: 0.66 };
   function readLock(key) {
     try { var sv = localStorage.getItem(key); if (sv !== null && !isNaN(Number(sv))) return Number(sv); } catch (e) {}
     return null;
