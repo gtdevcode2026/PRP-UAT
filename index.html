@@ -193,11 +193,13 @@ body > * { position: relative; z-index: var(--z-base); }
   border-radius: var(--r-panel); overflow: hidden;
   background: var(--surface);
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  padding: 11px 20px;
+  padding: 7px 16px;
 }
 .prp-logo { display: flex; align-items: center; gap: 22px; min-width: 0; }
 .prp-abinbev-logo { height: 28px; display: flex; align-items: center; flex-shrink: 0; }
-.prp-abinbev-logo img { height: 28px; width: auto; object-fit: contain; }
+/* screen-blend drops the PNG's baked-in black background so the mark sits
+   directly on the capsule instead of looking like a dark cutout. */
+.prp-abinbev-logo img { height: 28px; width: auto; object-fit: contain; mix-blend-mode: screen; }
 .prp-logo-sep { width: 1px; height: 26px; background: rgba(255,240,200,0.15); flex: none; }
 .prp-brand { min-width: 0; }
 .prp-brand-name {
@@ -232,31 +234,10 @@ body > * { position: relative; z-index: var(--z-base); }
 .prp-brand-btn.open .hamburger i:nth-child(1) { transform: translateY(6px) rotate(45deg); }
 .prp-brand-btn.open .hamburger i:nth-child(2) { transform: scaleX(0.7); opacity: 0; }
 .prp-brand-btn.open .hamburger i:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
-.prp-header-right { display: flex; align-items: center; gap: 9px; flex: none; }
-.prp-badge {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 6px 12px; border-radius: var(--r-chip);
-  background: var(--surface-2);
-  border: 1px solid var(--hairline-2);
-  font-size: var(--fs-sm); font-weight: 400; color: var(--tx-body);
-  white-space: nowrap; font-variant-numeric: tabular-nums;
-}
-.prp-badge strong { color: var(--gold); font-weight: 700; }
-/* The build stamp is diagnostic, not status - keep it readable but let the
-   "Ready" chip be the only thing in the header carrying a colour. */
-#prp-build { color: var(--tx-faint); border-color: transparent; }
-.prp-badge-py { color: var(--tx-mute); }
-.prp-badge-py::before {
-  content: ''; width: 6px; height: 6px; border-radius: 999px;
-  background: rgba(255,255,255,0.25); flex: none;
-}
-.prp-badge-py.ready { color: #B8D8A2; }
-.prp-badge-py.ready::before { background: var(--green); }
 /* Narrow screens: shed the header right-to-left rather than letting the
    product name crush down to a single letter. The logo plus the drawer
    toggle still identify and operate the app. */
 @media (max-width: 900px) { .prp-logo { gap: 14px; } }
-@media (max-width: 720px) { .prp-badge-hide { display: none; } }
 @media (max-width: 620px) { .prp-brand-sub { display: none; } }
 @media (max-width: 520px) {
   .prp-brand, .prp-logo-sep { display: none; }
@@ -287,6 +268,7 @@ body > * { position: relative; z-index: var(--z-base); }
   font-size: clamp(23px, 2.6vw, 30px); font-weight: 700; color: var(--tx-hi);
   line-height: 1.14; letter-spacing: -0.026em; text-wrap: balance;
 }
+.hero-title-gold { color: var(--gold); }
 .hero-sub {
   margin: 11px auto 0; max-width: 68ch; font-size: var(--fs-lg);
   color: var(--tx-mute); line-height: 1.6; text-wrap: pretty;
@@ -824,15 +806,6 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
         <span class="hamburger" aria-hidden="true"><i></i><i></i><i></i></span>
       </button>
     </div>
-    <div class="prp-header-right">
-      <span class="prp-badge prp-badge-py ready">Ready</span>
-      <span class="prp-badge prp-badge-hide"><strong>7</strong> reports</span>
-      <span class="prp-badge prp-badge-hide">Runs offline</span>
-      <!-- Build stamp. This file is downloaded and double-clicked, so a stale
-           copy is invisible: "I re-ran it and it still shows 0%" reads exactly
-           like "I re-ran the old file". Bump PRP_BUILD on every release. -->
-      <span class="prp-badge prp-badge-hide" id="prp-build" title="Build date of this file"></span>
-    </div>
   </div>
 
   <!-- REPORT DRAWER - opens via the "PRP Automation Dashboard" title/hamburger.
@@ -845,10 +818,21 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
   </nav>
 </header>
 
+<!-- Shared gradient for chart bars: gold fills are swapped to this sheen
+     after each Plotly draw (_gildBars). Zero size, purely a defs carrier. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="prp-gold-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#EFCB6B"/>
+      <stop offset="100%" stop-color="#B9973F"/>
+    </linearGradient>
+  </defs>
+</svg>
+
 <!-- HERO · STEP 1 · CREATE PRP (branding lives in the navbar; hero leads with the tool) -->
 <section class="hero" id="hero" aria-label="Create PRP workbook">
   <div class="hero-inner">
-    <h1 class="hero-title">Consolidate three exports into one workbook.</h1>
+    <h1 class="hero-title">Three exports in. <span class="hero-title-gold">One workbook out.</span></h1>
     <p class="hero-sub">Drop the raw OneTrust and TPRM exports below. Dates are normalised and
     ageing formulas added, then all seven reports run from the result - fully offline.</p>
 
@@ -935,13 +919,9 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 
 
 <script>
-// Build stamp - bump on every release. Rendered into the header badge so the
-// running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-30.3';
-(function () {
-  var el = document.getElementById('prp-build');
-  if (el) el.textContent = 'build ' + window.PRP_BUILD;
-})();
+// Build stamp - bump on every release. No longer shown in the header (badges
+// removed by request); check it via PRP_BUILD in the browser console.
+window.PRP_BUILD = '2026-07-30.4';
 
 // ── Inlined: report-engine.js ─────────────────────────────────────────────
 window.Reports = window.Reports || {};
@@ -4562,7 +4542,8 @@ function renderResults() {
         if (configs.length === 1) box.style.height = '100%';
         el.appendChild(box);
         const themed = _themeChartConfig(cfg);
-        Plotly.newPlot(box, themed.traces, themed.layout, { displayModeBar: false, responsive: true });
+        Plotly.newPlot(box, themed.traces, themed.layout, { displayModeBar: false, responsive: true })
+          .then(function() { _hookGild(box); });
       });
       return;
     }
@@ -4570,7 +4551,8 @@ function renderResults() {
     const cfg = sheet.chart.type === 'hbar'
       ? buildHBar(sheet.chart, 'Improve in Supplier Response Time')
       : buildBar(sheet.chart, null);
-    Plotly.newPlot(el, cfg.traces, cfg.layout, { displayModeBar: false, responsive: true });
+    Plotly.newPlot(el, cfg.traces, cfg.layout, { displayModeBar: false, responsive: true })
+      .then(function() { _hookGild(el); });
   });
 
 }
@@ -4624,6 +4606,28 @@ function tableHtml(headers, rows, totalRows) {
 // ---------------------------------------------------------------------------
 // Charts
 // ---------------------------------------------------------------------------
+// Gold bars get a top-to-bottom gradient sheen (defs: #prp-gold-grad in the
+// page) after each Plotly draw. Only known gold fills are swapped - green and
+// grey series keep their colors - and a redraw (responsive resize) re-applies
+// via plotly_afterplot. If nothing matches, bars simply stay flat gold.
+const _GILD_FILLS = ['rgba(203, 179, 92', 'rgb(203, 179, 92)', 'rgb(255, 192, 0)'];
+function _gildBars(plotEl) {
+  try {
+    plotEl.querySelectorAll('.trace.bars .point path').forEach(function(p) {
+      const f = p.style.fill || '';
+      if (_GILD_FILLS.some(function(g) { return f.indexOf(g) !== -1; })) {
+        p.style.fill = 'url(#prp-gold-grad)';
+      }
+    });
+  } catch (e) { /* flat gold fallback */ }
+}
+function _hookGild(plotEl) {
+  _gildBars(plotEl);
+  if (typeof plotEl.on === 'function') {
+    plotEl.on('plotly_afterplot', function() { _gildBars(plotEl); });
+  }
+}
+
 const _CHART_FONT = "Arial, 'Helvetica Neue', Helvetica, sans-serif";
 const _GOLD = ["#CBB35C","#4CAE5F","#C96A72","#5B83C2","#A86FC0","#DCA03C"];
 const _FILL = ["rgba(203,179,92,0.88)","rgba(76,174,95,0.8)","rgba(201,106,114,0.8)","rgba(91,131,194,0.8)","rgba(168,111,192,0.8)","rgba(220,160,60,0.8)"];
