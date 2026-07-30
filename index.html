@@ -81,7 +81,6 @@
   --tx-body:   rgba(255,255,255,0.80);
   --tx-mute:   rgba(255,255,255,0.62);
   --tx-faint:  rgba(255,255,255,0.52);
-  --tx-warm:   rgba(255,240,200,0.62);
   /* semantic status */
   --green:      #6FBF5A;
   --green-soft: #8EC877;
@@ -90,7 +89,7 @@
   /* solid surfaces (flat, no glass) */
   --surface:   #15171b;
   --surface-2: #1b1e24;
-  --surface-3: var(--surface-3);
+  --surface-3: #22262e;
   --glass:    #15171b;
   --hairline: rgba(255,255,255,0.10);
   --hairline-2: rgba(255,255,255,0.06);
@@ -110,6 +109,13 @@
   --fs-xl:  18px;
   --fs-2xl: 22px;
   --font: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  /* motion — two speeds and ONE curve. Every control that responds to the
+     pointer uses these, so the whole surface feels like one machine. The old
+     values drifted across .12/.18/.2/.24/.25/.3/.38s with two different eases. */
+  --dur-press: 120ms;   /* press feedback — must beat the finger leaving */
+  --dur-state: 180ms;   /* hover, colour, border */
+  --dur-reveal: 240ms;  /* drawers and panels */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);  /* ease-out-quart */
   /* semantic stacking order */
   --z-base:    1;
   --z-ring:    3;
@@ -163,9 +169,12 @@ body > * { position: relative; z-index: var(--z-base); }
 .ring-cap::before { background: var(--border-strong); }
 .ring-sb::before  { background: var(--hairline); }
 .ring-gold::before { background: rgba(237,201,79,0.30); }
+/* Panels are opaque and sit on a near-black page, so with no shadow at all they
+   read as flat markup. One tight contact shadow plus a very soft, heavily
+   negative-spread ambient = "printed on dark". No blur, no gradient, no glass. */
 .glass {
   background: var(--glass);
-  box-shadow: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.45), 0 14px 34px -30px rgba(0,0,0,0.9);
 }
 
 /* ── NAVBAR (solid corporate bar) ── */
@@ -173,7 +182,11 @@ body > * { position: relative; z-index: var(--z-base); }
   position: sticky; top: 0; z-index: var(--z-sticky);
   padding: 14px var(--gutter) 10px;
   background: var(--bg);
-  border-bottom: 1px solid transparent;
+  /* The bar is opaque and the same colour as the page, so without an edge the
+     content just vanishes under it. One hairline plus a low shadow reads as
+     "pinned" with no scroll listener. */
+  border-bottom: 1px solid var(--hairline-2);
+  box-shadow: 0 8px 24px -22px #000;
 }
 .prp-capsule {
   max-width: var(--maxw); margin: 0 auto;
@@ -200,9 +213,10 @@ body > * { position: relative; z-index: var(--z-base); }
 .prp-brand-btn {
   all: unset; display: flex; align-items: center; gap: 14px; min-width: 0;
   cursor: pointer; padding: 5px 12px 5px 6px; border-radius: var(--r-control);
-  transition: background .25s ease;
+  transition: background var(--dur-state) var(--ease);
 }
 .prp-brand-btn:hover { background: rgba(255,255,255,0.05); }
+.prp-brand-btn:active { background: rgba(255,255,255,0.09); }
 .prp-brand-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .hamburger {
   display: flex; flex-direction: column; justify-content: center; gap: 4px;
@@ -212,7 +226,7 @@ body > * { position: relative; z-index: var(--z-base); }
    transform + opacity only — no layout property in the transition. */
 .hamburger i {
   display: block; width: 20px; height: 2px; border-radius: 2px; background: var(--gold);
-  transition: transform .3s cubic-bezier(.32,.72,0,1), opacity .2s ease;
+  transition: transform var(--dur-reveal) var(--ease), opacity var(--dur-state) var(--ease);
 }
 .hamburger i:nth-child(2) { transform-origin: right center; transform: scaleX(0.7); }
 .prp-brand-btn.open .hamburger i:nth-child(1) { transform: translateY(6px) rotate(45deg); }
@@ -227,7 +241,10 @@ body > * { position: relative; z-index: var(--z-base); }
   font-size: var(--fs-sm); font-weight: 400; color: var(--tx-body);
   white-space: nowrap; font-variant-numeric: tabular-nums;
 }
-.prp-badge strong { color: var(--gold); font-weight: 650; }
+.prp-badge strong { color: var(--gold); font-weight: 700; }
+/* The build stamp is diagnostic, not status — keep it readable but let the
+   "Ready" chip be the only thing in the header carrying a colour. */
+#prp-build { color: var(--tx-faint); border-color: transparent; }
 .prp-badge-py { color: var(--tx-mute); }
 .prp-badge-py::before {
   content: ''; width: 6px; height: 6px; border-radius: 999px;
@@ -254,30 +271,33 @@ body > * { position: relative; z-index: var(--z-base); }
 .main-col { max-width: var(--maxw); margin: 0 auto; min-width: 0; }
 
 /* ── HERO (Step 1 · Create PRP) ──
-   A task header, not a landing page: left-aligned, sized to its own content,
-   so the pipeline below stays on screen instead of a viewport away. */
+   A task header, not a landing page: centred on its own axis and sized to its
+   own content, so the pipeline below stays on screen instead of a viewport
+   away. Only the hero's own title, sub and card centre — everything inside the
+   builder stays left-aligned, because those are scannable data rows. */
 .hero {
   position: relative;
-  padding: 38px var(--gutter) 40px;
+  padding: 44px var(--gutter);
 }
 .hero-inner {
   width: 100%; max-width: var(--maxw); margin: 0 auto;
-  display: flex; flex-direction: column; align-items: flex-start;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
 }
 .hero-title {
-  font-size: clamp(24px, 3vw, 32px); font-weight: 700; color: var(--tx-hi);
-  line-height: 1.14; letter-spacing: -0.022em; text-wrap: balance;
+  font-size: clamp(23px, 2.6vw, 30px); font-weight: 700; color: var(--tx-hi);
+  line-height: 1.14; letter-spacing: -0.026em; text-wrap: balance;
 }
 .hero-sub {
-  margin-top: 11px; max-width: 68ch; font-size: var(--fs-lg);
+  margin: 11px auto 0; max-width: 68ch; font-size: var(--fs-lg);
   color: var(--tx-mute); line-height: 1.6; text-wrap: pretty;
 }
 
 /* Builder card — single flat panel */
 .prp-builder {
-  width: 100%; max-width: 880px; margin-top: 24px;
+  width: 100%; max-width: 940px; margin: 24px auto 0;
   border-radius: var(--r-panel);
   background: var(--surface);
+  text-align: left;
 }
 .prp-builder-core {
   border-radius: inherit; padding: 20px 22px 22px;
@@ -291,9 +311,12 @@ body > * { position: relative; z-index: var(--z-base); }
   background: var(--surface-2);
   border: 1px solid var(--hairline-2);
   display: flex; flex-direction: column; gap: 5px; min-width: 0;
-  transition: background .2s ease, border-color .2s ease;
+  transition: background var(--dur-state) var(--ease), border-color var(--dur-state) var(--ease);
 }
 .prp-slot:hover { background: var(--surface-3); border-color: var(--hairline); }
+/* Large hit-areas press by darkening, not by moving — a card that slides under
+   the cursor reads as a glitch, where a button that dips reads as a button. */
+.prp-slot:active { background: var(--surface-2); border-color: var(--border-strong); }
 .prp-slot input[type="file"] { display: none; }
 .prp-slot-kind {
   display: flex; align-items: center; gap: 7px;
@@ -302,7 +325,7 @@ body > * { position: relative; z-index: var(--z-base); }
 .prp-slot-dot {
   width: 7px; height: 7px; border-radius: 999px; flex: none;
   background: rgba(255,255,255,0.22);
-  transition: background .2s;
+  transition: background var(--dur-state) var(--ease);
 }
 .prp-slot-file {
   font-size: var(--fs-sm); color: var(--tx-mute);
@@ -313,7 +336,7 @@ body > * { position: relative; z-index: var(--z-base); }
    confirms the moment a file lands in this slot. */
 .prp-slot.filled .prp-slot-dot {
   background: var(--green);
-  animation: dotFill .26s cubic-bezier(.32,.72,0,1) both;
+  animation: dotFill var(--dur-reveal) var(--ease) both;
 }
 @keyframes dotFill { from { transform: scale(0.4); } to { transform: scale(1); } }
 .prp-slot.filled .prp-slot-file { color: var(--tx-hi); }
@@ -330,15 +353,19 @@ body > * { position: relative; z-index: var(--z-base); }
   flex: 1 1 160px; min-width: 0; font-size: var(--fs-sm); color: var(--tx-hi);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Tertiary tier: the only gold-outline control on the page, and it only appears
+   when a file needs reassigning — so the outline reads as "act on this", not decor. */
 .prp-assign-btn {
   all: unset; cursor: pointer;
   font-size: var(--fs-sm); font-weight: 700;
-  display: inline-flex; align-items: center; min-height: 34px;
-  color: var(--gold); padding: 6px 12px; border-radius: var(--r-chip);
+  display: inline-flex; align-items: center; min-height: 40px;
+  color: var(--gold); padding: 8px 14px; border-radius: var(--r-chip);
   border: 1px solid rgba(237,201,79,0.35);
-  transition: background .2s ease, color .2s ease;
+  transition: background var(--dur-state) var(--ease), color var(--dur-state) var(--ease),
+              border-color var(--dur-state) var(--ease), transform var(--dur-press) var(--ease);
 }
-.prp-assign-btn:hover { background: rgba(237,201,79,0.12); color: var(--gold-hi); }
+.prp-assign-btn:hover { background: rgba(237,201,79,0.12); color: var(--gold-hi); border-color: rgba(237,201,79,0.55); }
+.prp-assign-btn:active { transform: translateY(1px); }
 .prp-assign-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .prp-status {
   font-size: var(--fs-sm); color: var(--tx-mute); min-height: 19px;
@@ -356,7 +383,7 @@ body > * { position: relative; z-index: var(--z-base); }
 .nav-drawer {
   max-width: var(--maxw); margin: 0 auto;
   display: grid; grid-template-rows: 0fr; opacity: 0; pointer-events: none;
-  transition: grid-template-rows .38s cubic-bezier(.32,.72,0,1), opacity .24s ease;
+  transition: grid-template-rows var(--dur-reveal) var(--ease), opacity var(--dur-state) var(--ease);
 }
 .nav-drawer-inner { overflow: hidden; min-height: 0; }
 .nav-drawer.open { grid-template-rows: 1fr; opacity: 1; pointer-events: auto; }
@@ -372,9 +399,10 @@ body > * { position: relative; z-index: var(--z-base); }
   padding: 11px 13px; border-radius: var(--r-control); cursor: pointer;
   border: 1px solid transparent;
   color: var(--tx-mute);
-  transition: background .2s ease, color .2s ease;
+  transition: background var(--dur-state) var(--ease), color var(--dur-state) var(--ease);
 }
 .nav-item:hover:not(.active) { background: rgba(255,255,255,0.05); color: var(--tx-hi); }
+.nav-item:active:not(.active) { background: rgba(255,255,255,0.09); }
 .nav-item:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .nav-item.active {
   color: var(--tx-hi);
@@ -386,7 +414,7 @@ body > * { position: relative; z-index: var(--z-base); }
   border: 1px solid var(--hairline); color: var(--tx-mute);
   font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
   display: grid; place-items: center;
-  transition: background .2s, color .2s, border-color .2s;
+  transition: background var(--dur-state) var(--ease), color var(--dur-state) var(--ease), border-color var(--dur-state) var(--ease);
 }
 .nav-item.active .nav-num {
   background: var(--gold);
@@ -423,10 +451,10 @@ body > * { position: relative; z-index: var(--z-base); }
 
 /* ── UPLOAD ZONE ── */
 .upload-zone {
-  position: relative; border: 1px dashed var(--border-strong); border-radius: var(--r-control);
+  position: relative; border: 1px dashed rgba(237,201,79,0.20); border-radius: var(--r-control);
   padding: 12px; text-align: center; cursor: pointer;
   background: var(--surface-2);
-  transition: border-color .2s, background .2s;
+  transition: border-color var(--dur-state) var(--ease), background var(--dur-state) var(--ease);
   flex: 1; display: flex; align-items: center; justify-content: center; min-height: 52px;
 }
 .upload-zone:hover, .upload-zone.drag-over {
@@ -467,7 +495,7 @@ body > * { position: relative; z-index: var(--z-base); }
   padding: 12px 14px; border-radius: var(--r-control); cursor: pointer; margin-bottom: 8px;
   background: var(--surface-2);
   border: 1px solid var(--hairline-2);
-  transition: background .2s, border-color .2s;
+  transition: background var(--dur-state) var(--ease), border-color var(--dur-state) var(--ease);
 }
 /* Native radio underneath — keyboard arrow-keys and screen-reader
    semantics come free; the dot below is the visual. */
@@ -478,6 +506,7 @@ body > * { position: relative; z-index: var(--z-base); }
 /* Same reason as the upload zone: ring the visible label, not the 1px input. */
 .variant-input:focus-visible { outline: none; }
 .variant-radio:hover:not(.active) { background: var(--surface-3); }
+.variant-radio:active:not(.active) { background: var(--surface-2); border-color: var(--hairline); }
 .variant-radio:has(.variant-input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 2px; }
 .variant-radio.active {
   background: rgba(237,201,79,0.08);
@@ -486,7 +515,7 @@ body > * { position: relative; z-index: var(--z-base); }
 .radio-dot {
   width: 17px; height: 17px; border-radius: 999px; flex: none; margin-top: 3px;
   border: 2px solid var(--border-strong);
-  display: grid; place-items: center; transition: border-color .2s;
+  display: grid; place-items: center; transition: border-color var(--dur-state) var(--ease);
 }
 .variant-radio.active .radio-dot { border-color: var(--gold); }
 .variant-radio.active .radio-dot::after {
@@ -502,10 +531,13 @@ body > * { position: relative; z-index: var(--z-base); }
 .run-btn {
   position: relative; width: 100%;
   background: var(--gold);
-  color: var(--gold-ink); border: none; border-radius: var(--r-control);
+  color: var(--gold-ink); border-radius: var(--r-control);
+  /* The border is reserved in every state, not added on :disabled — otherwise
+     the inner content shifts a pixel the moment the button goes inert. */
+  border: 1px solid transparent;
   font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.01em;
   min-height: 44px; padding: 11px 16px; text-align: center; cursor: pointer;
-  transition: background .18s ease, transform .12s ease;
+  transition: background var(--dur-state) var(--ease), transform var(--dur-press) var(--ease);
 }
 .run-btn:hover:not(:disabled) { background: var(--gold-hi); }
 .run-btn:active:not(:disabled) { transform: translateY(1px); }
@@ -513,53 +545,82 @@ body > * { position: relative; z-index: var(--z-base); }
    defect — this clears 4.5:1 while staying visibly inert. */
 .run-btn:disabled {
   background: var(--surface-2); color: rgba(255,255,255,0.48);
-  border: 1px solid var(--hairline-2); cursor: not-allowed;
+  border-color: var(--hairline-2); cursor: not-allowed;
+}
+/* Busy is not the same as blocked. Both states are `disabled`, so without this
+   "Creating…" looked exactly like "Add all three exports to enable" — the user
+   can't tell a working button from a dead one. Reuses the page spinner. */
+.run-btn.is-busy { color: var(--tx-body); }
+.run-btn.is-busy::before {
+  content: ''; display: inline-block; vertical-align: -2px;
+  width: 13px; height: 13px; margin-right: 9px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.16); border-top-color: var(--gold);
+  animation: spin 0.8s linear infinite;
 }
 .run-hint { font-size: var(--fs-sm); color: var(--tx-mute); text-align: center; padding: 4px 0; }
 .d2-finance { margin-bottom: 10px; }
 .d2-finance[hidden] { display: none; }
 .d2-finance-label { display: block; font-size: var(--fs-sm); color: var(--tx-mute); margin-bottom: 6px; }
+/* The only free-text field in the app. It was the one control off the locked
+   radius scale (10px), and its focus state replaced the ring with a 1px border
+   tint — a 1px colour shift is not a focus indicator. Same gold ring as every
+   other control now, so keyboard users get one consistent signal. */
 .d2-finance input {
-  width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 10px;
+  width: 100%; box-sizing: border-box; padding: 10px 12px; min-height: 40px;
+  border-radius: var(--r-control);
   background: var(--surface-3); border: 1px solid var(--hairline); color: var(--tx-hi);
   font: inherit; font-size: var(--fs-sm);
+  transition: border-color var(--dur-state) var(--ease), background var(--dur-state) var(--ease);
 }
-.d2-finance input:focus { outline: none; border-color: rgba(237,201,79,0.45); }
+.d2-finance input::placeholder { color: var(--tx-faint); }
+.d2-finance input:hover { border-color: var(--border-strong); }
+.d2-finance input:focus-visible {
+  outline: 2px solid var(--gold); outline-offset: 2px;
+  border-color: rgba(237,201,79,0.45);
+}
 .history-note {
   display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
   font-size: var(--fs-sm); color: var(--tx-mute); text-align: center; padding: 2px 0;
 }
 .history-note[hidden] { display: none; }
 .history-note strong { color: var(--tx-hi); font-variant-numeric: tabular-nums; }
+/* Text tier. Inline in a sentence, so it can't take a 44px box — 26px clears the
+   WCAG 2.5.8 minimum without breaking the line it sits in. */
 .history-reset {
   appearance: none; margin: 0; cursor: pointer;
-  background: none; border: none; padding: 4px 2px;
+  background: none; border: none; padding: 5px 4px; min-height: 26px;
   font-size: var(--fs-sm); font-weight: 700; color: var(--gold);
   text-decoration: underline; text-underline-offset: 3px;
+  transition: color var(--dur-state) var(--ease);
 }
 .history-reset:hover { color: var(--gold-hi); }
+.history-reset:active { color: var(--gold); text-underline-offset: 2px; }
 .history-reset:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
 
 /* ── RUN OUTPUTS ── */
 .run-outputs { display: none; }
-.run-outputs.show { display: flex; flex-direction: column; gap: 9px; animation: fadeUp .4s cubic-bezier(.32,.72,0,1) both; }
+.run-outputs.show { display: flex; flex-direction: column; gap: 9px; animation: fadeUp var(--dur-reveal) var(--ease) both; }
 .run-out-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .run-out-label {
   font-size: var(--fs-sm); font-weight: 700; color: var(--tx-body);
 }
 .run-out-ok { font-size: var(--fs-sm); color: var(--green-soft); white-space: nowrap; }
 .dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+/* Secondary tier: same geometry and the same press as the primary button, one
+   step down in weight. 44px so it's a comfortable target, not a 40px near-miss. */
 .dl-btn, .copy-link {
   appearance: none; margin: 0;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 40px; padding: 10px 14px; border-radius: var(--r-control); min-width: 0;
+  min-height: 44px; padding: 11px 14px; border-radius: var(--r-control); min-width: 0;
   background: var(--surface-2);
   border: 1px solid var(--hairline);
   color: var(--tx-hi); font-size: var(--fs-sm); font-weight: 700;
   text-decoration: none; cursor: pointer;
-  transition: background .2s, border-color .2s, color .2s;
+  transition: background var(--dur-state) var(--ease), border-color var(--dur-state) var(--ease),
+              color var(--dur-state) var(--ease), transform var(--dur-press) var(--ease);
 }
 .dl-btn:hover, .copy-link:hover { background: var(--surface-3); border-color: var(--border-strong); }
+.dl-btn:active, .copy-link:active { transform: translateY(1px); }
 .dl-btn:focus-visible, .copy-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .dl-btn svg, .copy-link svg { color: var(--gold); flex: none; }
 .dl-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -568,7 +629,7 @@ body > * { position: relative; z-index: var(--z-base); }
 
 /* ── PYTHON CHART PREVIEW ── */
 .py-charts-wrap { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
-.py-chart-img { max-width: 100%; height: auto; display: block; border-radius: 6px; }
+.py-chart-img { max-width: 100%; height: auto; display: block; border-radius: var(--r-chip); }
 .py-chart-note { padding: 32px; text-align: center; color: var(--tx-mute); font-size: var(--fs-md); }
 
 /* ── PREVIEW HEADER ── */
@@ -596,14 +657,17 @@ body > * { position: relative; z-index: var(--z-base); }
 
 /* ── TABLES ── */
 .data-table-wrap {
-  overflow: auto; max-height: 360px;
+  overflow: auto; max-height: min(60vh, 560px);
   border: 1px solid var(--hairline); border-radius: var(--r-panel);
 }
 .data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .data-table thead { position: sticky; top: 0; z-index: var(--z-base); }
+/* Uppercase is the one place case does real work here — it separates the header
+   band from the data without needing a heavier rule or a second colour. */
 .data-table th {
   background: var(--surface-2);
-  font-size: var(--fs-xs); font-weight: 700; color: var(--tx-body);
+  font-size: var(--fs-xs); font-weight: 700; color: var(--tx-mute);
+  text-transform: uppercase; letter-spacing: 0.06em;
   padding: 10px 14px; text-align: left;
   border-bottom: 1px solid var(--hairline); white-space: nowrap;
 }
@@ -613,6 +677,10 @@ body > * { position: relative; z-index: var(--z-base); }
   white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
+/* Numeric columns are flagged per-column in tableHtml() — figures line up on
+   the decimal the way they do in the workbook. */
+.data-table .num { text-align: right; }
+.data-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
 .data-table tbody tr:hover td { background: rgba(237,201,79,0.06); }
 .data-table tr:last-child td { border-bottom: none; }
 .table-hint { font-size: var(--fs-xs); color: var(--tx-mute); margin-top: 8px; }
@@ -622,12 +690,12 @@ details.log-details { border-radius: var(--r-panel); margin-top: 6px; overflow: 
 details.log-details summary {
   color: var(--tx-mute); font-size: var(--fs-sm); font-weight: 700;
   min-height: 44px; padding: 12px 18px; cursor: pointer; list-style: none; user-select: none;
-  display: flex; align-items: center; gap: 9px; transition: color .25s;
+  display: flex; align-items: center; gap: 9px; transition: color var(--dur-state) var(--ease);
 }
 details.log-details summary::-webkit-details-marker { display: none; }
 details.log-details summary::before {
   content: '›'; font-size: var(--fs-lg); color: var(--gold);
-  transition: transform .2s ease; display: inline-block; line-height: 1;
+  transition: transform var(--dur-state) var(--ease); display: inline-block; line-height: 1;
 }
 details.log-details[open] summary::before { transform: rotate(90deg); }
 details.log-details summary:hover { color: var(--gold); }
@@ -649,27 +717,20 @@ details.log-details[open] summary { border-bottom: 1px solid var(--hairline-2); 
 .spinner { width: 28px; height: 28px; border: 2px solid rgba(237,201,79,0.15); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner-text { color: var(--tx-mute); font-size: var(--fs-sm); text-align: center; }
+/* Static placeholders. The spinner already says "working"; a sweeping shimmer
+   on top of it was decoration carrying no extra information. */
 .skeleton { margin-top: 8px; }
 .skeleton-bar-block {
-  height: 200px; border-radius: 16px; margin-bottom: 18px;
-  background:
-    linear-gradient(90deg, transparent 0%, rgba(237,201,79,0.06) 50%, transparent 100%),
-    rgba(255,255,255,0.02);
-  background-size: 220% 100%, auto; background-repeat: no-repeat;
+  height: 200px; border-radius: var(--r-panel); margin-bottom: 18px;
+  background: rgba(255,255,255,0.02);
   box-shadow: inset 0 1px 1px rgba(255,255,255,0.05);
-  animation: shimmer 1.5s ease-in-out infinite;
 }
 .skeleton-line {
   height: 12px; border-radius: 6px; margin-bottom: 11px;
-  background:
-    linear-gradient(90deg, transparent 0%, rgba(237,201,79,0.07) 50%, transparent 100%),
-    rgba(255,255,255,0.035);
-  background-size: 220% 100%, auto; background-repeat: no-repeat;
-  animation: shimmer 1.5s ease-in-out infinite;
+  background: rgba(255,255,255,0.035);
 }
 .skeleton-line.w-40 { width: 40%; } .skeleton-line.w-70 { width: 70%; }
 .skeleton-line.w-90 { width: 90%; } .skeleton-line.w-55 { width: 55%; }
-@keyframes shimmer { 0% { background-position: 120% 0, 0 0; } 100% { background-position: -120% 0, 0 0; } }
 
 /* ── ALERT ── */
 .alert-error {
@@ -719,8 +780,8 @@ details.log-details[open] summary { border-bottom: 1px solid var(--hairline-2); 
    it left each child at opacity 0 until its delay elapsed. One short
    settle on the container says "this is new" without holding data back. */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.anim-fade-up { animation: fadeUp 0.4s cubic-bezier(0.32,0.72,0,1) both; }
-.results-reveal { animation: fadeUp 0.34s cubic-bezier(0.32,0.72,0,1) both; }
+.anim-fade-up { animation: fadeUp var(--dur-reveal) var(--ease) both; }
+.results-reveal { animation: fadeUp var(--dur-reveal) var(--ease) both; }
 
 hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); margin: 4px 0 22px; }
 </style>
@@ -729,7 +790,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 
 <!-- LOADING OVERLAY -->
 <div id="prp-load-overlay" role="status" aria-live="polite" style="position:fixed;inset:0;z-index:var(--z-overlay);background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
-  <svg id="prp-load-spin" width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true" style="animation:prp-spin 1s linear infinite;"><circle cx="17" cy="17" r="13" stroke="rgba(237,201,79,0.18)" stroke-width="3"/><path d="M17 4a13 13 0 0 1 13 13" stroke="#e0c040" stroke-width="3" stroke-linecap="round"/></svg>
+  <svg id="prp-load-spin" width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true" style="animation:prp-spin 1s linear infinite;"><circle cx="17" cy="17" r="13" stroke="rgba(237,201,79,0.18)" stroke-width="3"/><path d="M17 4a13 13 0 0 1 13 13" stroke="#EDC94F" stroke-width="3" stroke-linecap="round"/></svg>
   <div style="color:var(--tx-mute);font-size:var(--fs-md);">Loading the offline engine…</div>
   <div id="prp-load-err" style="display:none;color:var(--red-soft);font-size:var(--fs-sm);text-align:center;max-width:52ch;padding:0 24px;line-height:1.8;"></div>
 </div>
@@ -876,7 +937,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp — bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-29.11';
+window.PRP_BUILD = '2026-07-30.1';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -4192,6 +4253,9 @@ function updateRunBtn() {
   const hint = document.getElementById('run-hint');
   btn.disabled = !S.file || S.running;
   btn.textContent = S.running ? 'Running…' : 'Run report';
+  // Both "no workbook yet" and "currently running" leave the button disabled;
+  // is-busy is what tells them apart on screen.
+  btn.classList.toggle('is-busy', S.running);
   if (!S.file) {
     hint.textContent = 'Upload a workbook to enable';
     hint.style.display = 'block';
@@ -4346,9 +4410,14 @@ function renderResults() {
   let html = '<div class="results-reveal">';
 
   // Process preview header
+  // Same bar as the loading state, with the meta slot filled in: which report
+  // this is and how many sheets it produced.
   html += '<div class="preview-bar">' +
           '<span class="preview-title">Process preview</span>' +
           '<span class="preview-rule"></span>' +
+          '<span class="preview-meta">' + esc(S.activeGroup || '') +
+          ' &middot; ' + d.sheets.length + ' sheet' + (d.sheets.length !== 1 ? 's' : '') +
+          '</span>' +
           '</div>';
 
   d.sheets.forEach(function(sheet, si) {
@@ -4509,15 +4578,39 @@ function renderResults() {
 // ---------------------------------------------------------------------------
 // Table HTML
 // ---------------------------------------------------------------------------
+// A column is numeric only if EVERY value in it that isn't blank reads as a
+// number — counts, percentages, thousands-separated figures, negatives. One
+// stray label ("Grand Total", "n/a") and the column stays left-aligned, which is
+// the right call: half-aligned columns are worse than none.
+function isNumericCell(v) {
+  if (typeof v === 'number') return isFinite(v);
+  const s = String(v).trim().replace(/[,\s]/g, '').replace(/%$/, '');
+  return s !== '' && isFinite(Number(s));
+}
+function numericColumns(headers, rows) {
+  return headers.map(function(_, c) {
+    let seen = 0;
+    for (let r = 0; r < rows.length; r++) {
+      const v = rows[r][c];
+      if (v === null || v === undefined || String(v).trim() === '') continue;
+      if (!isNumericCell(v)) return false;
+      seen++;
+    }
+    return seen > 0;
+  });
+}
+
 function tableHtml(headers, rows, totalRows) {
+  const isNum = numericColumns(headers, rows);
+  const numAttr = function(c) { return isNum[c] ? ' class="num"' : ''; };
   let h = '<div class="data-table-wrap" tabindex="0"><table class="data-table"><thead><tr>';
-  headers.forEach(function(hdr) { h += '<th scope="col">' + esc(hdr || '') + '</th>'; });
+  headers.forEach(function(hdr, c) { h += '<th scope="col"' + numAttr(c) + '>' + esc(hdr || '') + '</th>'; });
   h += '</tr></thead><tbody>';
   rows.forEach(function(row) {
     h += '<tr>';
-    row.forEach(function(v) {
+    row.forEach(function(v, c) {
       const s = v === null || v === undefined ? '' : String(v);
-      h += '<td title="' + escAttr(s) + '">' + esc(s) + '</td>';
+      h += '<td' + numAttr(c) + ' title="' + escAttr(s) + '">' + esc(s) + '</td>';
     });
     h += '</tr>';
   });
@@ -4535,16 +4628,23 @@ const _CHART_FONT = "Arial, 'Helvetica Neue', Helvetica, sans-serif";
 const _GOLD = ["#CBB35C","#4CAE5F","#C96A72","#5B83C2","#A86FC0","#DCA03C"];
 const _FILL = ["rgba(203,179,92,0.88)","rgba(76,174,95,0.8)","rgba(201,106,114,0.8)","rgba(91,131,194,0.8)","rgba(168,111,192,0.8)","rgba(220,160,60,0.8)"];
 
-function _baseLayout(title) {
+// Short category labels (zone codes: GRO, MEX, SAZ…) sit upright; only long ones
+// get tilted. The old unconditional -25° tilted "GRO" for no reason.
+function _tickAngle(labels) {
+  if (!labels || !labels.length) return -25;
+  return labels.every(function(l) { return String(l == null ? '' : l).length <= 8; }) ? 0 : -25;
+}
+
+function _baseLayout(title, labels) {
   const tc = "#B3A67E", gc = "rgba(255,255,255,0.06)";
   const font = { family:_CHART_FONT, color:tc, size:11 };
   return {
-    title: title ? { text:title, font:{ family:_CHART_FONT, color:"#D8CBA0", size:11.5 }, x:0, xanchor:"left", pad:{ l:4, b:12 } } : undefined,
+    title: title ? { text:title, font:{ family:_CHART_FONT, color:"#D8CBA0", size:12.5 }, x:0, xanchor:"left", pad:{ l:4, b:12 } } : undefined,
     paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)", font,
     margin:{ l:48, r:20, t:title ? 40 : 20, b:60 },
-    legend:{ orientation:"h", yanchor:"bottom", y:1.02, xanchor:"right", x:1, font:{ family:_CHART_FONT, color:"#CFC4A0", size:10.5 }, bgcolor:"rgba(0,0,0,0)", bordercolor:"rgba(0,0,0,0)" },
-    xaxis:{ gridcolor:gc, linecolor:"rgba(237,201,79,0.22)", tickcolor:"rgba(237,201,79,0.22)", tickfont:{ family:_CHART_FONT, color:tc, size:10 }, tickangle:-25 },
-    yaxis:{ gridcolor:gc, linecolor:"rgba(237,201,79,0.22)", tickcolor:"rgba(237,201,79,0.22)", tickfont:{ family:_CHART_FONT, color:tc, size:10 }, zeroline:false },
+    legend:{ orientation:"h", yanchor:"bottom", y:1.02, xanchor:"right", x:1, font:{ family:_CHART_FONT, color:"#CFC4A0", size:11 }, bgcolor:"rgba(0,0,0,0)", bordercolor:"rgba(0,0,0,0)" },
+    xaxis:{ gridcolor:gc, linecolor:"rgba(237,201,79,0.22)", tickcolor:"rgba(237,201,79,0.22)", tickfont:{ family:_CHART_FONT, color:tc, size:11 }, tickangle:_tickAngle(labels) },
+    yaxis:{ gridcolor:gc, linecolor:"rgba(237,201,79,0.22)", tickcolor:"rgba(237,201,79,0.22)", tickfont:{ family:_CHART_FONT, color:tc, size:11 }, zeroline:false },
     hoverlabel:{ bgcolor:"#14110a", bordercolor:"rgba(237,201,79,0.25)", font:{ family:_CHART_FONT, color:"#F4ECD4", size:12 } },
   };
 }
@@ -4557,7 +4657,7 @@ function buildBar(chartData, title) {
       hovertemplate:"<b>%{x}</b><br>" + esc(s.name) + ": <b>%{y:,.0f}</b><extra></extra>",
     };
   });
-  const layout = Object.assign(_baseLayout(title), { barmode: chartData.stacked ? "stack" : "group", bargap:0.22, bargroupgap:0.06 });
+  const layout = Object.assign(_baseLayout(title, chartData.labels), { barmode: chartData.stacked ? "stack" : "group", bargap:0.22, bargroupgap:0.06 });
   return { traces, layout };
 }
 
@@ -4582,7 +4682,8 @@ function _themeChartConfig(cfg) {
   const src = cfg.layout || {};
   const titleText = src.title && src.title.text
     ? String(src.title.text).replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "") : null;
-  const base = _baseLayout(titleText);
+  const firstX = (cfg.traces || []).length ? cfg.traces[0].x : null;
+  const base = _baseLayout(titleText, Array.isArray(firstX) ? firstX : null);
   const layout = Object.assign({}, base, { bargap:0.22, bargroupgap:0.06 });
   if (src.barmode) layout.barmode = src.barmode;
   if (src.showlegend !== undefined) layout.showlegend = src.showlegend;
@@ -4613,7 +4714,7 @@ function _themeChartConfig(cfg) {
 
 function buildHBar(chartData, title) {
   const tc = "#B3A67E", gc = "rgba(255,255,255,0.06)";
-  const font = { family:_CHART_FONT, color:tc, size:10 };
+  const font = { family:_CHART_FONT, color:tc, size:11 };
   const vals = chartData.series[0].values;
   const maxVal = Math.max.apply(null, vals.concat([0]));
   const traces = [{
@@ -4622,11 +4723,11 @@ function buildHBar(chartData, title) {
     marker:{ color:"rgba(237,201,79,0.82)" },
     text:vals.map(function(v) { return (v * 100).toFixed(0) + "%"; }),
     textposition:"outside",
-    textfont:{ color:"#E8DDBB", size:10, family:_CHART_FONT },
+    textfont:{ color:"#E8DDBB", size:11, family:_CHART_FONT },
     hovertemplate:"<b>%{y}</b>: <b>%{x:.0%}</b><extra></extra>",
   }];
   const layout = {
-    title: title ? { text:title, font:{ family:_CHART_FONT, color:"#D8CBA0", size:11.5 }, x:0, xanchor:"left", pad:{ l:4, b:12 } } : undefined,
+    title: title ? { text:title, font:{ family:_CHART_FONT, color:"#D8CBA0", size:12.5 }, x:0, xanchor:"left", pad:{ l:4, b:12 } } : undefined,
     paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)", font,
     margin:{ l:130, r:70, t:40, b:40 },
     xaxis:{ gridcolor:gc, linecolor:"rgba(237,201,79,0.22)", tickformat:".0%", tickfont:font, zeroline:false, range:[0, maxVal * 1.3] },
@@ -4687,6 +4788,8 @@ function b64ToBytes(b64) {
     var missing = missingKinds();
     btn.disabled = missing.length > 0 || H.running;
     btn.textContent = H.running ? 'Creating…' : 'Create PRP workbook';
+    // Disabled covers both "files missing" and "working"; is-busy separates them.
+    btn.classList.toggle('is-busy', H.running);
     if (!H.running) {
       if (missing.length === 3) setStatus('Add all three exports to enable');
       else if (missing.length) setStatus('Still missing: ' + missing.map(function (k) { return KIND_LABEL[k]; }).join(' · '));

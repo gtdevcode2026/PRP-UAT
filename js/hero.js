@@ -38,6 +38,8 @@
     var missing = missingKinds();
     btn.disabled = missing.length > 0 || H.running;
     btn.textContent = H.running ? 'Creating…' : 'Create PRP workbook';
+    // Disabled covers both "files missing" and "working"; is-busy separates them.
+    btn.classList.toggle('is-busy', H.running);
     if (!H.running) {
       if (missing.length === 3) setStatus('Add all three exports to enable');
       else if (missing.length) setStatus('Still missing: ' + missing.map(function (k) { return KIND_LABEL[k]; }).join(' · '));
