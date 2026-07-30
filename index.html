@@ -197,7 +197,7 @@ body > * { position: relative; z-index: var(--z-base); }
 }
 .prp-logo { display: flex; align-items: center; gap: 22px; min-width: 0; }
 .prp-abinbev-logo { height: 38px; display: flex; align-items: center; flex-shrink: 0; }
-.prp-abinbev-logo svg { height: 38px; width: auto; display: block; }
+.prp-abinbev-logo img, .prp-abinbev-logo svg { height: 38px; width: auto; display: block; }
 .prp-logo-sep { width: 1px; height: 26px; background: rgba(255,240,200,0.15); flex: none; }
 .prp-brand { min-width: 0; }
 .prp-brand-name {
@@ -781,9 +781,11 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
   <div class="prp-capsule ring ring-cap">
     <div class="prp-logo">
       <div class="prp-abinbev-logo">
-        <!-- Inline replica of the AB InBev lockup (mark + wordmark + tagline):
-             transparent, crisp at any size, no image file needed. -->
-        <svg id="logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 78" role="img" aria-label="AB InBev - To a Future With More Cheers">
+        <!-- Official lockup (transparent PNG). The inline SVG replica below
+             only shows if ABI.png is missing from the folder. -->
+        <img src="ABI.png" alt="AB InBev - To a Future With More Cheers" id="logo-img"
+             onerror="this.style.display='none';var s=document.getElementById('logo-svg');if(s)s.style.display='block';">
+        <svg id="logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 78" role="img" aria-label="AB InBev - To a Future With More Cheers" style="display:none">
           <g transform="translate(30,32)">
             <path d="M1,-1 C3,-22 20,-24 20,-8 C14,2 4,4 1,-1Z" fill="#F5C518"/>
             <path d="M1,-1 C3,-22 20,-24 20,-8 C14,2 4,4 1,-1Z" fill="#D4A800" transform="rotate(120,0,0)"/>
@@ -920,7 +922,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp - bump on every release. No longer shown in the header (badges
 // removed by request); check it via PRP_BUILD in the browser console.
-window.PRP_BUILD = '2026-07-30.5';
+window.PRP_BUILD = '2026-07-30.6';
 
 // ── Inlined: report-engine.js ─────────────────────────────────────────────
 window.Reports = window.Reports || {};
