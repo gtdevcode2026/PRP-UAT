@@ -5,8 +5,7 @@
 // itself when unmapped - unlike s2a/s3d's zone_map, "Europe" stays
 // "Europe" here, not "EUR"), pivots Org Display x Final Stage (count, no
 // margins), sorts to a fixed zone order, appends a Grand Total row, and
-// computes a small KPI panel (static Baseline/Q1/Target plus one computed
-// bar per quarter that has data - Q2 Apr-Jun, Q3 Jul-Sep, Q4 Oct-Dec).
+// computes a small KPI panel (3 static values + 1 computed Q2 rate).
 // Writes "output file D2.xlsx" as a single hand-built "Dashboard" sheet
 // (filter area, then the pivot table, then the KPI table below it) - the
 // exact row offsets matter because the existing preview pipeline re-treats
@@ -111,47 +110,13 @@ window.Reports.d2 = async function d2(wb, opts) {
     : financeNames.length
       ? 'Finance filter: names were given but no Respondents column was found - fell back to Tags == "cyber" (' + recordTotal + ' rows).'
       : 'Finance filter: Tags column (Tags == "cyber") - ' + recordTotal + ' rows.';
-  // Quarter KPI bars with month roll-up (mirrors Diagram 4's display rule):
-  // Q1 stays static. A quarter shows as ONE "Q# '26" bar only once it is
-  // COMPLETE - its ending month has data (Jun->Q2, Sep->Q3, Dec->Q4),
-  // computed as that quarter's Closed / Total. Until then the quarter's
-  // months appear individually: July-only data yields a "Jul '26" bar
-  // beside the finished Q2, not a premature Q3.
-  var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  var mStats = {}; // month (4-12) -> { closed, total }; Q1 months stay static
-  filtered.forEach(function (r) {
-    var d = E.excelDateInfo(r['Date created']);
-    if (!d || d.month < 4) return;
-    var s = mStats[d.month] || (mStats[d.month] = { closed: 0, total: 0 });
-    s.total++;
-    if (r['Final Stage'] === 'Closed') s.closed++;
-  });
+  var q2_26 = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
   var KPI = [
     ["Baseline '25", 0.60, 'Static'],
     ["Q1 '26", 0.32, 'Static'],
+    ["Q2 '26", q2_26, ''],
+    ["Target '26", 0.65, 'Static'],
   ];
-  var qNotes = [];
-  function pushRate(label, closed, total) {
-    KPI.push([label, Math.round((closed / total) * 100) / 100, '']);
-    qNotes.push(label.replace(" '26", '') + ': ' + closed + ' / ' + total);
-  }
-  [2, 3, 4].forEach(function (q) {
-    var months = [q * 3 - 2, q * 3 - 1, q * 3];
-    if (mStats[q * 3]) { // quarter complete: ending month has data
-      var closed = 0, total = 0;
-      months.forEach(function (m) {
-        var s = mStats[m];
-        if (s) { closed += s.closed; total += s.total; }
-      });
-      pushRate('Q' + q + " '26", closed, total);
-    } else { // in progress: each month with data gets its own bar
-      months.forEach(function (m) {
-        var s = mStats[m];
-        if (s) pushRate(MONTH_ABBR[m - 1] + " '26", s.closed, s.total);
-      });
-    }
-  });
-  KPI.push(["Target '26", 0.65, 'Static']);
 
   function setCell(grid, row1, col1, value) {
     var r = row1 - 1, c = col1 - 1;
@@ -184,8 +149,8 @@ window.Reports.d2 = async function d2(wb, opts) {
     setCell(grid, rowNum, 3, k[2]);
   });
   var noteRow = kpiStartRow + KPI.length + 2;
-  setCell(grid, noteRow, 1, 'Quarter formula');
-  setCell(grid, noteRow, 2, 'Closed / Total per quarter = ' + (qNotes.length ? qNotes.join(', ') : 'no quarter data yet'));
+  setCell(grid, noteRow, 1, 'Q2 formula');
+  setCell(grid, noteRow, 2, 'Closed / Grand Total = ' + closedTotal + ' / ' + recordTotal);
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
 
