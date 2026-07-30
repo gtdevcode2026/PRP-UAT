@@ -5,10 +5,10 @@
 // itself when unmapped - unlike s2a/s3d's zone_map, "Europe" stays
 // "Europe" here, not "EUR"), pivots Org Display x Final Stage (count, no
 // margins), sorts to a fixed zone order, appends a Grand Total row, and
-// computes a KPI panel that follows TODAY's calendar: finished quarters
-// are static single bars (Q1 fixed in code, later quarters lock for good
-// on their first run after quarter end), the running quarter shows its
-// elapsed months individually, Baseline/Target stay static bookends.
+// computes a KPI panel that follows TODAY's calendar: every finished
+// period is static (Q1 fixed in code; later quarters and past months
+// lock for good on the first run after they end), only the current
+// month's bar stays live, Baseline/Target stay static bookends.
 // Writes "output file D2.xlsx" as a single hand-built "Dashboard" sheet
 // (filter area, then the pivot table, then the KPI table below it) - the
 // exact row offsets matter because the existing preview pipeline re-treats
@@ -133,38 +133,62 @@ window.Reports.d2 = async function d2(wb, opts) {
   var nowQuarter = Math.floor((nowMonth - 1) / 3) + 1;
   var KPI = [["Baseline '25", 0.60, 'Static']];
   var kpiNotes = [];
-  // Finished quarters are STATIC. Q1 '26 is fixed in code; each later
-  // quarter locks on the FIRST run after it ends: the averaged rate is
-  // saved to this browser's localStorage and every following run reuses
-  // that saved value untouched, whatever workbook or filter is loaded.
-  // Clearing site data (or localStorage.removeItem('PRP_D2_KPI_Q2_26')
-  // in the console) re-arms the one-time computation for that quarter.
+  // Every value locks as soon as its period is over. A month locks when the
+  // NEXT month begins: its rate is computed once, saved to this browser's
+  // localStorage, and reused untouched on every later run whatever workbook
+  // or filter is loaded - only the CURRENT month stays live. Finished
+  // quarters lock the same way as the average of their three locked months
+  // (Q1 '26 is fixed at 32% in code). Clearing site data - or e.g.
+  // localStorage.removeItem('PRP_D2_KPI_Jul_26') in the console - re-arms
+  // the one-time computation for that period.
   var STATIC_Q = { 1: 0.32 };
-  for (var q = 1; q < nowQuarter; q++) {
+  function readLock(key) {
+    try { var sv = localStorage.getItem(key); if (sv !== null && !isNaN(Number(sv))) return Number(sv); } catch (e) {}
+    return null;
+  }
+  function writeLock(key, v) { try { localStorage.setItem(key, String(v)); } catch (e) {} }
+  // Rate for a FINISHED month: its saved lock first; else computed once from
+  // this run's data and saved for good; null when there is nothing to go on.
+  function finishedMonthRate(m) {
+    var key = 'PRP_D2_KPI_' + MONTH_ABBR[m - 1] + '_26';
+    var v = readLock(key);
+    if (v !== null) return v;
+    if (!mStats[m]) return null;
+    v = Math.round((mStats[m].closed / mStats[m].total) * 100) / 100;
+    writeLock(key, v);
+    return v;
+  }
+  for (var q = 1; q < nowQuarter; q++) { // finished quarters -> one static bar
     var lockKey = 'PRP_D2_KPI_Q' + q + '_26';
-    var locked = STATIC_Q.hasOwnProperty(q) ? STATIC_Q[q] : null;
+    var locked = STATIC_Q.hasOwnProperty(q) ? STATIC_Q[q] : readLock(lockKey);
     if (locked === null) {
-      try { var sv = localStorage.getItem(lockKey); if (sv !== null && !isNaN(Number(sv))) locked = Number(sv); } catch (e) {}
-    }
-    if (locked !== null) {
+      var parts = [], sum = 0, n = 0;
+      [q * 3 - 2, q * 3 - 1, q * 3].forEach(function (m) {
+        var v = finishedMonthRate(m);
+        if (v === null) return;
+        sum += v; n++;
+        parts.push(MONTH_ABBR[m - 1] + ' ' + Math.round(v * 100) + '%');
+      });
+      if (!n) continue;
+      locked = Math.round((sum / n) * 100) / 100;
+      writeLock(lockKey, locked);
       KPI.push(['Q' + q + " '26", locked, 'Static']);
-      kpiNotes.push('Q' + q + ' locked at ' + Math.round(locked * 100) + '%');
+      kpiNotes.push('Q' + q + ' = avg(' + parts.join(', ') + ') - now locked');
       continue;
     }
-    var have = [q * 3 - 2, q * 3 - 1, q * 3].filter(function (m) { return mStats[m]; });
-    if (!have.length) continue;
-    var avg = have.reduce(function (a, m) { return a + mStats[m].closed / mStats[m].total; }, 0) / have.length;
-    avg = Math.round(avg * 100) / 100;
-    try { localStorage.setItem(lockKey, String(avg)); } catch (e) {}
-    KPI.push(['Q' + q + " '26", avg, 'Static']);
-    kpiNotes.push('Q' + q + ' = avg(' + have.map(function (m) {
-      return MONTH_ABBR[m - 1] + ' ' + mStats[m].closed + '/' + mStats[m].total;
-    }).join(', ') + ') - now locked');
+    KPI.push(['Q' + q + " '26", locked, 'Static']);
+    kpiNotes.push('Q' + q + ' locked at ' + Math.round(locked * 100) + '%');
   }
-  for (var m = nowQuarter * 3 - 2; m <= nowMonth; m++) { // running quarter -> month bars
-    if (!mStats[m]) continue;
-    KPI.push([MONTH_ABBR[m - 1] + " '26", Math.round((mStats[m].closed / mStats[m].total) * 100) / 100, '']);
-    kpiNotes.push(MONTH_ABBR[m - 1] + ' = ' + mStats[m].closed + '/' + mStats[m].total);
+  for (var m = nowQuarter * 3 - 2; m <= nowMonth; m++) { // running quarter
+    if (m < nowMonth) { // finished month -> locked static bar
+      var mv = finishedMonthRate(m);
+      if (mv === null) continue;
+      KPI.push([MONTH_ABBR[m - 1] + " '26", mv, 'Static']);
+      kpiNotes.push(MONTH_ABBR[m - 1] + ' locked at ' + Math.round(mv * 100) + '%');
+    } else if (mStats[m]) { // current month -> live
+      KPI.push([MONTH_ABBR[m - 1] + " '26", Math.round((mStats[m].closed / mStats[m].total) * 100) / 100, '']);
+      kpiNotes.push(MONTH_ABBR[m - 1] + ' = ' + mStats[m].closed + '/' + mStats[m].total + ' (live)');
+    }
   }
   KPI.push(["Target '26", 0.65, 'Static']);
 
