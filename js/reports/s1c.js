@@ -106,7 +106,7 @@ window.Reports.s1c = async function s1c(wb) {
     zoneRows.map(function (r) { return r[0]; }), zoneRows.map(function (r) { return r[1]; }),
     'Active by Zone', 'Zone', 'Count'
   );
-  // Live Plotly previews of the same styled charts (no baked images) —
+  // Live Plotly previews of the same styled charts (no baked images) -
   // preview and the native Excel charts always match.
   var chartConfigs = { 'Summary': chart1, 'Active by Zone': chart2 };
 

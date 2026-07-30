@@ -2,21 +2,21 @@
 
 AB InBev TPRM & Risk Intelligence dashboard.
 
-## Quick start — browser only (no install needed)
+## Quick start - browser only (no install needed)
 
 1. Download this repo: **Code → Download ZIP**, then unzip it.
 2. Keep `index.html` next to the `vendor/` and `js/` folders.
 3. **Double-click `index.html`.** Build the PRP workbook in **Create PRP**, pick a report, click **Run**.
 
-All steps run in JavaScript in your browser (SheetJS, ExcelJS, Plotly — all
+All steps run in JavaScript in your browser (SheetJS, ExcelJS, Plotly - all
 vendored locally). Charts are generated to match the original Python script
 output exactly. Recommended browsers: Chrome or Edge.
 
 ## Usage
 
-1. **Create PRP** (hero section): drop the three raw exports — the filenames
+1. **Create PRP** (hero section): drop the three raw exports - the filenames
    are matched automatically (`*risk-export*.xlsx`, `*assessment-export*.xlsx`,
-   `*tprm*`/`*supplier*.xlsx`) — and click **Create PRP workbook**. The
+   `*tprm*`/`*supplier*.xlsx`) - and click **Create PRP workbook**. The
    consolidated workbook (dates normalised, `Aging`/`Ageing`/`Working1`/
    `Working2`/`30sep26` formulas added) downloads and is auto-loaded into the
    pipeline below. Already have a consolidated workbook? Skip this step and

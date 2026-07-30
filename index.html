@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PRP Automation Dashboard — AB InBev</title>
+<title>PRP Automation Dashboard - AB InBev</title>
 <!-- ============================================================
-     FULLY OFFLINE BUNDLE — everything loads from the local vendor/ and js/
+     FULLY OFFLINE BUNDLE - everything loads from the local vendor/ and js/
      folders next to this file. No internet, no server, no Python runtime.
      Just open index.html.
      ============================================================ -->
 <script>
-/* Async vendor loader — tries local vendor/ first, falls back to CDN.
+/* Async vendor loader - tries local vendor/ first, falls back to CDN.
    Our own JS (report-engine, bridge, all reports) is inlined below so it
    never needs a file load and works even when the ZIP is opened without
    extracting. */
@@ -45,7 +45,7 @@
     return loadScript(item.local).catch(function () { return loadScript(item.cdn); }).then(function () { return loadVendors(rest); });
   }
   loadVendors(VENDORS).then(function () { _vendorsOk = true; _check(); }).catch(function (err) { _vendorErr = err; _check(); });
-  /* Optional vendors — animation only. Never sets _vendorErr: the app must
+  /* Optional vendors - animation only. Never sets _vendorErr: the app must
      boot and stay fully usable if these are missing or offline.
      ScrollTrigger is deliberately not loaded: nothing in this tool reveals
      on scroll any more, so it would be ~43 KB of dead weight. */
@@ -61,7 +61,7 @@
 
 
 /* ============================================================
-   PRP Automation Dashboard — visual system v5
+   PRP Automation Dashboard - visual system v5
    Palette : near-black + AB InBev gold (green / red = status only)
    Radius  : panels 12 · controls 8 · chips 6  (locked)
    Type    : ONE family. `body` carries the only font-family
@@ -101,7 +101,7 @@
   /* one content width, shared by header, hero, drawer and shell */
   --maxw:      1400px;
   --gutter:    clamp(16px, 3vw, 28px);
-  /* type scale — one family, six steps, ratio ~1.15 */
+  /* type scale - one family, six steps, ratio ~1.15 */
   --fs-xs:  11.5px;
   --fs-sm:  12.5px;
   --fs-md:  13px;
@@ -109,10 +109,10 @@
   --fs-xl:  18px;
   --fs-2xl: 22px;
   --font: Arial, 'Helvetica Neue', Helvetica, sans-serif;
-  /* motion — two speeds and ONE curve. Every control that responds to the
+  /* motion - two speeds and ONE curve. Every control that responds to the
      pointer uses these, so the whole surface feels like one machine. The old
      values drifted across .12/.18/.2/.24/.25/.3/.38s with two different eases. */
-  --dur-press: 120ms;   /* press feedback — must beat the finger leaving */
+  --dur-press: 120ms;   /* press feedback - must beat the finger leaving */
   --dur-state: 180ms;   /* hover, colour, border */
   --dur-reveal: 240ms;  /* drawers and panels */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);  /* ease-out-quart */
@@ -223,7 +223,7 @@ body > * { position: relative; z-index: var(--z-base); }
   width: 20px; height: 16px; flex: none;
 }
 /* Bars are all one width and shortened with scaleX, so open/close animates
-   transform + opacity only — no layout property in the transition. */
+   transform + opacity only - no layout property in the transition. */
 .hamburger i {
   display: block; width: 20px; height: 2px; border-radius: 2px; background: var(--gold);
   transition: transform var(--dur-reveal) var(--ease), opacity var(--dur-state) var(--ease);
@@ -242,7 +242,7 @@ body > * { position: relative; z-index: var(--z-base); }
   white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 .prp-badge strong { color: var(--gold); font-weight: 700; }
-/* The build stamp is diagnostic, not status — keep it readable but let the
+/* The build stamp is diagnostic, not status - keep it readable but let the
    "Ready" chip be the only thing in the header carrying a colour. */
 #prp-build { color: var(--tx-faint); border-color: transparent; }
 .prp-badge-py { color: var(--tx-mute); }
@@ -263,7 +263,7 @@ body > * { position: relative; z-index: var(--z-base); }
   .prp-brand-btn { padding: 8px; }
 }
 
-/* ── SHELL (full viewport width — no sidebar column, the report list now
+/* ── SHELL (full viewport width - no sidebar column, the report list now
    lives in the hamburger drawer below the header) ── */
 .shell {
   padding: 6px var(--gutter) 52px;
@@ -273,7 +273,7 @@ body > * { position: relative; z-index: var(--z-base); }
 /* ── HERO (Step 1 · Create PRP) ──
    A task header, not a landing page: centred on its own axis and sized to its
    own content, so the pipeline below stays on screen instead of a viewport
-   away. Only the hero's own title, sub and card centre — everything inside the
+   away. Only the hero's own title, sub and card centre - everything inside the
    builder stays left-aligned, because those are scannable data rows. */
 .hero {
   position: relative;
@@ -292,7 +292,7 @@ body > * { position: relative; z-index: var(--z-base); }
   color: var(--tx-mute); line-height: 1.6; text-wrap: pretty;
 }
 
-/* Builder card — single flat panel */
+/* Builder card - single flat panel */
 .prp-builder {
   width: 100%; max-width: 940px; margin: 24px auto 0;
   border-radius: var(--r-panel);
@@ -314,7 +314,7 @@ body > * { position: relative; z-index: var(--z-base); }
   transition: background var(--dur-state) var(--ease), border-color var(--dur-state) var(--ease);
 }
 .prp-slot:hover { background: var(--surface-3); border-color: var(--hairline); }
-/* Large hit-areas press by darkening, not by moving — a card that slides under
+/* Large hit-areas press by darkening, not by moving - a card that slides under
    the cursor reads as a glitch, where a button that dips reads as a button. */
 .prp-slot:active { background: var(--surface-2); border-color: var(--border-strong); }
 .prp-slot input[type="file"] { display: none; }
@@ -354,7 +354,7 @@ body > * { position: relative; z-index: var(--z-base); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* Tertiary tier: the only gold-outline control on the page, and it only appears
-   when a file needs reassigning — so the outline reads as "act on this", not decor. */
+   when a file needs reassigning - so the outline reads as "act on this", not decor. */
 .prp-assign-btn {
   all: unset; cursor: pointer;
   font-size: var(--fs-sm); font-weight: 700;
@@ -497,7 +497,7 @@ body > * { position: relative; z-index: var(--z-base); }
   border: 1px solid var(--hairline-2);
   transition: background var(--dur-state) var(--ease), border-color var(--dur-state) var(--ease);
 }
-/* Native radio underneath — keyboard arrow-keys and screen-reader
+/* Native radio underneath - keyboard arrow-keys and screen-reader
    semantics come free; the dot below is the visual. */
 .variant-input {
   position: absolute; width: 1px; height: 1px; margin: 0;
@@ -532,7 +532,7 @@ body > * { position: relative; z-index: var(--z-base); }
   position: relative; width: 100%;
   background: var(--gold);
   color: var(--gold-ink); border-radius: var(--r-control);
-  /* The border is reserved in every state, not added on :disabled — otherwise
+  /* The border is reserved in every state, not added on :disabled - otherwise
      the inner content shifts a pixel the moment the button goes inert. */
   border: 1px solid transparent;
   font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.01em;
@@ -542,13 +542,13 @@ body > * { position: relative; z-index: var(--z-base); }
 .run-btn:hover:not(:disabled) { background: var(--gold-hi); }
 .run-btn:active:not(:disabled) { transform: translateY(1px); }
 /* Disabled is exempt from WCAG contrast, but "can't read it" is still a
-   defect — this clears 4.5:1 while staying visibly inert. */
+   defect - this clears 4.5:1 while staying visibly inert. */
 .run-btn:disabled {
   background: var(--surface-2); color: rgba(255,255,255,0.48);
   border-color: var(--hairline-2); cursor: not-allowed;
 }
 /* Busy is not the same as blocked. Both states are `disabled`, so without this
-   "Creating…" looked exactly like "Add all three exports to enable" — the user
+   "Creating…" looked exactly like "Add all three exports to enable" - the user
    can't tell a working button from a dead one. Reuses the page spinner. */
 .run-btn.is-busy { color: var(--tx-body); }
 .run-btn.is-busy::before {
@@ -563,7 +563,7 @@ body > * { position: relative; z-index: var(--z-base); }
 .d2-finance-label { display: block; font-size: var(--fs-sm); color: var(--tx-mute); margin-bottom: 6px; }
 /* The only free-text field in the app. It was the one control off the locked
    radius scale (10px), and its focus state replaced the ring with a 1px border
-   tint — a 1px colour shift is not a focus indicator. Same gold ring as every
+   tint - a 1px colour shift is not a focus indicator. Same gold ring as every
    other control now, so keyboard users get one consistent signal. */
 .d2-finance input {
   width: 100%; box-sizing: border-box; padding: 10px 12px; min-height: 40px;
@@ -584,7 +584,7 @@ body > * { position: relative; z-index: var(--z-base); }
 }
 .history-note[hidden] { display: none; }
 .history-note strong { color: var(--tx-hi); font-variant-numeric: tabular-nums; }
-/* Text tier. Inline in a sentence, so it can't take a 44px box — 26px clears the
+/* Text tier. Inline in a sentence, so it can't take a 44px box - 26px clears the
    WCAG 2.5.8 minimum without breaking the line it sits in. */
 .history-reset {
   appearance: none; margin: 0; cursor: pointer;
@@ -662,7 +662,7 @@ body > * { position: relative; z-index: var(--z-base); }
 }
 .data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .data-table thead { position: sticky; top: 0; z-index: var(--z-base); }
-/* Uppercase is the one place case does real work here — it separates the header
+/* Uppercase is the one place case does real work here - it separates the header
    band from the data without needing a heavier rule or a second colour. */
 .data-table th {
   background: var(--surface-2);
@@ -677,7 +677,7 @@ body > * { position: relative; z-index: var(--z-base); }
   white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-/* Numeric columns are flagged per-column in tableHtml() — figures line up on
+/* Numeric columns are flagged per-column in tableHtml() - figures line up on
    the decimal the way they do in the workbook. */
 .data-table .num { text-align: right; }
 .data-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
@@ -765,7 +765,7 @@ details.log-details[open] summary { border-bottom: 1px solid var(--hairline-2); 
 .empty-state-icon svg { width: 22px; height: 22px; }
 .empty-state-title { font-size: var(--fs-xl); font-weight: 700; color: var(--tx-hi); letter-spacing: -0.015em; margin-bottom: 8px; }
 .empty-state-desc { font-size: var(--fs-md); color: var(--tx-mute); text-align: center; max-width: 46ch; line-height: 1.65; margin-bottom: 20px; text-wrap: pretty; }
-/* The four stages, in order, as an ordered list — the sequence is the
+/* The four stages, in order, as an ordered list - the sequence is the
    information, so the arrows carry it instead of decorative numbering. */
 .empty-steps {
   display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
@@ -816,7 +816,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
       <!-- aria-label carries the accessible name once .prp-brand is hidden on
            narrow screens; it contains the visible text, so Label-in-Name holds. -->
       <button class="prp-brand-btn" id="nav-toggle" type="button" aria-expanded="false"
-              aria-controls="nav-drawer" aria-label="PRP Automation Dashboard — report list">
+              aria-controls="nav-drawer" aria-label="PRP Automation Dashboard - report list">
         <div class="prp-brand">
           <div class="prp-brand-name">PRP Automation Dashboard</div>
           <div class="prp-brand-sub">TPRM &amp; Risk Intelligence</div>
@@ -835,7 +835,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
     </div>
   </div>
 
-  <!-- REPORT DRAWER — opens via the "PRP Automation Dashboard" title/hamburger.
+  <!-- REPORT DRAWER - opens via the "PRP Automation Dashboard" title/hamburger.
        The inner wrapper is what the 0fr→1fr grid row clips; the panel keeps
        its own padding without leaking a sliver when the drawer is closed. -->
   <nav class="nav-drawer" id="nav-drawer" aria-label="Reports">
@@ -850,7 +850,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
   <div class="hero-inner">
     <h1 class="hero-title">Consolidate three exports into one workbook.</h1>
     <p class="hero-sub">Drop the raw OneTrust and TPRM exports below. Dates are normalised and
-    ageing formulas added, then all seven reports run from the result — fully offline.</p>
+    ageing formulas added, then all seven reports run from the result - fully offline.</p>
 
     <div class="prp-builder glass ring ring-gold" id="prp-builder">
       <div class="prp-builder-core">
@@ -859,17 +859,17 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
           <div class="upload-hint"><b>Drop all 3 exports</b>· or click to browse · risk-export · assessment-export · tprm / supplier</div>
         </div>
         <div class="prp-slots">
-          <div class="prp-slot" id="prp-slot-risk" data-kind="risk" role="button" tabindex="0" aria-label="Risk export slot — click to browse">
+          <div class="prp-slot" id="prp-slot-risk" data-kind="risk" role="button" tabindex="0" aria-label="Risk export slot - click to browse">
             <input type="file" accept=".xlsx" aria-hidden="true" tabindex="-1">
             <span class="prp-slot-kind"><span class="prp-slot-dot"></span>Risk export</span>
             <span class="prp-slot-file">*risk-export*.xlsx</span>
           </div>
-          <div class="prp-slot" id="prp-slot-assessment" data-kind="assessment" role="button" tabindex="0" aria-label="Assessment export slot — click to browse">
+          <div class="prp-slot" id="prp-slot-assessment" data-kind="assessment" role="button" tabindex="0" aria-label="Assessment export slot - click to browse">
             <input type="file" accept=".xlsx" aria-hidden="true" tabindex="-1">
             <span class="prp-slot-kind"><span class="prp-slot-dot"></span>Assessment export</span>
             <span class="prp-slot-file">*assessment-export*.xlsx</span>
           </div>
-          <div class="prp-slot" id="prp-slot-tprm" data-kind="tprm" role="button" tabindex="0" aria-label="TPRM export slot — click to browse">
+          <div class="prp-slot" id="prp-slot-tprm" data-kind="tprm" role="button" tabindex="0" aria-label="TPRM export slot - click to browse">
             <input type="file" accept=".xlsx" aria-hidden="true" tabindex="-1">
             <span class="prp-slot-kind"><span class="prp-slot-dot"></span>TPRM / Supplier</span>
             <span class="prp-slot-file">*tprm* / *supplier*.xlsx</span>
@@ -935,9 +935,9 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 
 
 <script>
-// Build stamp — bump on every release. Rendered into the header badge so the
+// Build stamp - bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-30.1';
+window.PRP_BUILD = '2026-07-30.2';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -972,7 +972,7 @@ window.ReportEngine = (function () {
     }
     // Lazy: parse ONLY this sheet from the raw bytes, on demand, then cache it.
     // Each report reads a single sheet, so we skip parsing the rest of the
-    // workbook entirely — the big speed win on multi-sheet exports (~2-3x).
+    // workbook entirely - the big speed win on multi-sheet exports (~2-3x).
     if (wb && wb.__lazy) {
       if (wb._cache[sheetName]) return wb._cache[sheetName];
       var w = XLSX.read(wb.__lazy, Object.assign({ sheets: [sheetName] }, LAZY_READ_OPTS));
@@ -1003,7 +1003,7 @@ window.ReportEngine = (function () {
     }
     // Text dates. pandas' to_datetime accepts far more shapes than `new Date()`
     // does, and a report that silently drops every row it cannot parse reports a
-    // confident wrong number rather than an error — a "Date created" column
+    // confident wrong number rather than an error - a "Date created" column
     // exported as 14/12/2026 made every 2026 filter in this app match nothing.
     // Each shape is decomposed with a regex and never round-tripped through a
     // local-time Date, for the same reason the numeric branch decodes by hand.
@@ -1028,8 +1028,8 @@ window.ReportEngine = (function () {
     m = s.match(/^([A-Za-z]{3,})[-\s](\d{1,2})[-\s,]+(\d{4})/);
     if (m) { var mo2 = MONTH_NUM[m[1].slice(0, 3).toLowerCase()]; if (mo2) return ymdInfo(+m[3], mo2, +m[2], s); }
     // Anything exotic: let the engine try. Every string still reaching here was
-    // parsed as LOCAL time — only date-only ISO strings are treated as UTC, and
-    // those are handled above — so read the local components. The previous code
+    // parsed as LOCAL time - only date-only ISO strings are treated as UTC, and
+    // those are handled above - so read the local components. The previous code
     // read the UTC ones, which shifted every text date back a day anywhere east
     // of Greenwich (12/14/2026 came out as the 13th, and 01/01/2026 came out in
     // 2025 and was dropped by a year filter).
@@ -1133,7 +1133,7 @@ window.ReportEngine = (function () {
     });
     return lines.join('\n') + '\n';
   }
-  // Exact match only — s4's "Total Risk" is a real series, not a totals line.
+  // Exact match only - s4's "Total Risk" is a real series, not a totals line.
   function isTotalLabel(v) { var s = isBlank(v) ? '' : String(v).trim().toLowerCase(); return s === 'grand total' || s === 'total'; }
   function chartableFromSheet(sheet) {
     if (!sheet || !sheet.rows.length) return null;
@@ -1143,7 +1143,7 @@ window.ReportEngine = (function () {
     if (!numericIdx.length || !labelIdx.length) return null;
     // A "Grand Total" COLUMN is the sum of the other series, so charting it adds a
     // redundant bar that dwarfs its own parts (d3's Summary). Drop it, same as the
-    // totals ROW below — unless it's the only numeric column, leaving nothing to plot.
+    // totals ROW below - unless it's the only numeric column, leaving nothing to plot.
     // The table keeps the column; this only affects the chart.
     var nonTotalIdx = numericIdx.filter(function (i) { return !isTotalLabel(headers[i]); });
     if (nonTotalIdx.length) numericIdx = nonTotalIdx;
@@ -1170,7 +1170,7 @@ window.ReportEngine = (function () {
     var labels = [], values = [];
     // Read only the contiguous KPI table, stopping at the blank row that ends
     // it. This used to scan to the bottom of the sheet, so any later block with
-    // a label and a number became an extra bar — a "Rows matching 36" row below
+    // a label and a number became an extra bar - a "Rows matching 36" row below
     // the table charted as 3600%. The KPI chart is a fixed four-metric panel;
     // it has no business reading rows the table does not own.
     for (var r = kpiRowIdx + 1; r < grid.length; r++) {
@@ -1179,7 +1179,7 @@ window.ReportEngine = (function () {
       if (isBlank(metric) || String(metric).trim() === '') break;
       var val = row[valueCol];
       // Genuine numeric cells only: parseFloat('2026 x36') would yield 2026.
-      // Exception: strict "NN%" strings — d2's KPI Value column renders its
+      // Exception: strict "NN%" strings - d2's KPI Value column renders its
       // fractions as percent text ("60%"), which must keep charting as 0.60.
       var num = typeof val === 'number' ? val
         : (typeof val === 'string' && /^-?\d+(\.\d+)?%$/.test(val.trim())) ? parseFloat(val) / 100 : NaN;
@@ -1222,9 +1222,9 @@ window.ReportEngine = (function () {
   }
   function mapZone(org, table, fallback) { return table.hasOwnProperty(org) ? table[org] : (fallback === undefined ? org : fallback); }
   // Growth/BEES zone sanitizer, shared by every report that groups on an org
-  // or zone column: GRO / Growth / GROWTH / BEES / BEES | FINTECH — in any
+  // or zone column: GRO / Growth / GROWTH / BEES / BEES | FINTECH - in any
   // casing, spacing, punctuation, or with invisible characters (zero-width
-  // space, NBSP) — all report as the single zone 'GRO'. Letters-only compare
+  // space, NBSP) - all report as the single zone 'GRO'. Letters-only compare
   // so visually-identical export variants can never split the bucket.
   function sanitizeZone(v) {
     var s = (v === null || v === undefined) ? '' : String(v);
@@ -1300,7 +1300,7 @@ window.ReportEngine = (function () {
       var dashGrid = findRawGrid(files, 'Dashboard');
       special = dashGrid ? d2ChartFromGrid(dashGrid) : null;
     } else if (sid === 's4') {
-      // Chart the Dashboard's "Chart Label/Chart Value" helper block — the
+      // Chart the Dashboard's "Chart Label/Chart Value" helper block - the
       // same Baseline + display periods + Target series the embedded native
       // chart plots. Falls back to the rolled-up Display History sheet, then
       // to the full monthly history file.
@@ -1357,13 +1357,13 @@ window.ReportBridge = (function () {
   // ── Async parse for very large files only (40MB+) ─────────────────────────
   // The common path is lazy single-sheet parsing (see readSheet), which is
   // fast and stays short. But a single enormous sheet parsed synchronously
-  // could still block long enough to freeze the page — and under file://
+  // could still block long enough to freeze the page - and under file://
   // (double-click) Web Workers are blocked, so we can't offload to a thread.
   // For those rare huge files we parse with ExcelJS's async loader instead,
   // which breaks the work into event-loop turns (yields ~every 400ms) so the
   // page never locks up. Each worksheet is converted into the exact
-  // { headers, rows } shape readSheet produces — verified cell-for-cell
-  // identical on real workbooks (dates included) — so every report runs
+  // { headers, rows } shape readSheet produces - verified cell-for-cell
+  // identical on real workbooks (dates included) - so every report runs
   // unchanged.
 
   // Normalize an ExcelJS cell value to the plain value SheetJS would yield.
@@ -1399,7 +1399,7 @@ window.ReportBridge = (function () {
     var ExcelJSLib = window.ExcelJS;
     if (!ExcelJSLib || !ExcelJSLib.Workbook) throw new Error('ExcelJS unavailable');
     var wb = new ExcelJSLib.Workbook();
-    await wb.xlsx.load(buf);            // async — yields during unzip + XML parse
+    await wb.xlsx.load(buf);            // async - yields during unzip + XML parse
     var out = {};
     for (var s = 0; s < wb.worksheets.length; s++) {
       var ws = wb.worksheets[s];
@@ -1445,7 +1445,7 @@ window.ReportBridge = (function () {
   function buildPayload(sid, result) {
     var processed = E.processSheets(sid, result.files);
     var charts = E.selectCharts(sid, processed, result.files);
-    // Styled Plotly configs from the report itself — the exact traces/layout
+    // Styled Plotly configs from the report itself - the exact traces/layout
     // of the chart embedded in the Excel output. The preview renders these
     // live; the generic auto-derived chart is only a fallback.
     var chartConfigs = result.chartConfigs || {};
@@ -1465,7 +1465,7 @@ window.ReportBridge = (function () {
     };
   }
   // opts is passed straight through to the report (d2 reads
-  // opts.financeRespondents — the names typed in the Generate card).
+  // opts.financeRespondents - the names typed in the Generate card).
   async function runReport(entry, file, opts) {
     var buf = await file.arrayBuffer();
     var wb;
@@ -1495,17 +1495,17 @@ window.ReportBridge = (function () {
   return { runReport, buildPayload, renderStyledPng, dataUrlToBase64, arrayBufferToBase64 };
 })();
 
-// ── Inlined: create-prp.js — CreatePRP — in-browser port of create_prp.py ──────────────────────────
+// ── Inlined: create-prp.js - CreatePRP - in-browser port of create_prp.py ──────────────────────────
 // Merges the 3 raw exports (risk-export / assessment-export / tprm|supplier)
 // into the consolidated PRP workbook the report pipeline consumes.
 //
 // Intentional deviations from create_prp.py:
 //  · TPRM sheet is named 'TPRM Web-Portal Export' (the Python writes
 //    'TPRM WebApp Portal', but reports d1/s1c and the shipped sample output
-//    read 'TPRM Web-Portal Export' — the Python name appears to be drift).
+//    read 'TPRM Web-Portal Export' - the Python name appears to be drift).
 //  · Every appended formula cell also carries its computed result
-//    ({formula, result}) so the in-browser reports — which read cached
-//    values, never recalculate — see real data. Excel still recalculates on
+//    ({formula, result}) so the in-browser reports - which read cached
+//    values, never recalculate - see real data. Excel still recalculates on
 //    open (calcProperties.fullCalcOnLoad), keeping TODAY() fresh.
 //  · Tags are resolved via findOrAddColumn (case-insensitive) rather than
 //    addColumn, so a source header of 'tags' is overwritten in place instead
@@ -1514,7 +1514,7 @@ window.CreatePRP = (function () {
   'use strict';
 
   var SHEET_RISK = 'OneTrust - Risk Export';
-  var SHEET_TPRM = 'TPRM Web-Portal Export';   // deviation — see header comment
+  var SHEET_TPRM = 'TPRM Web-Portal Export';   // deviation - see header comment
   var SHEET_ASSESSMENT = 'OneTrust Assessment';
   var OUTPUT_NAME = 'PRP Sample Jun (2).xlsx';
 
@@ -1535,7 +1535,7 @@ window.CreatePRP = (function () {
 
   function _yield() { return new Promise(function (res) { setTimeout(res, 0); }); }
 
-  // ── classify — mirrors find_source_files()'s filename checks ────────────
+  // ── classify - mirrors find_source_files()'s filename checks ────────────
   function classify(fileName) {
     var lower = String(fileName || '').toLowerCase();
     if (!/\.xlsx$/.test(lower)) return null;
@@ -1545,7 +1545,7 @@ window.CreatePRP = (function () {
     return null;
   }
 
-  // ── date parsing — the 5 strptime formats, in the Python's order ────────
+  // ── date parsing - the 5 strptime formats, in the Python's order ────────
   // %Y is exactly 4 digits; day/month accept 1-2; invalid calendar dates
   // (31/02/…) fall through to the next format, like strptime raising.
   var DATE_FORMATS = [
@@ -1629,7 +1629,7 @@ window.CreatePRP = (function () {
     return plainVal(v);
   }
 
-  // ── copy_sheet — coordinate-preserving value copy ───────────────────────
+  // ── copy_sheet - coordinate-preserving value copy ───────────────────────
   async function copySheet(src, target, progress, label) {
     var rows = src.rowCount, cols = src.columnCount;
     for (var r = 1; r <= rows; r++) {
@@ -1646,7 +1646,7 @@ window.CreatePRP = (function () {
         if (nv instanceof Date) cell.numFmt = 'yyyy-mm-dd h:mm:ss';
       }
       if ((r & 2047) === 0) {
-        progress('Copying ' + label + ' — row ' + r.toLocaleString() + ' of ' + rows.toLocaleString() + '…');
+        progress('Copying ' + label + ' - row ' + r.toLocaleString() + ' of ' + rows.toLocaleString() + '…');
         await _yield();
       }
     }
@@ -1672,7 +1672,7 @@ window.CreatePRP = (function () {
   }
   // Case-insensitive reuse. Used for Tags only: unlike Ageing/Working1/… the
   // Tags column already exists in the export, and its casing is whatever
-  // OneTrust emitted — an exact-match miss would append a duplicate column
+  // OneTrust emitted - an exact-match miss would append a duplicate column
   // and leave the real one stale.
   function findOrAddColumn(ws, headerName) {
     var existing = findColumn(ws, headerName);
@@ -1682,7 +1682,7 @@ window.CreatePRP = (function () {
     return newCol;
   }
 
-  // True when the row holds nothing at all — interior blanks in the export
+  // True when the row holds nothing at all - interior blanks in the export
   // must not pick up a default tag just for occupying a row number.
   function isEmptyRow(ws, r) {
     var vals = ws.getRow(r).values;
@@ -1718,7 +1718,7 @@ window.CreatePRP = (function () {
     return DEFAULT_TAG;
   }
 
-  // Overwrites Tags for every populated row — the filter-and-fill, in code.
+  // Overwrites Tags for every populated row - the filter-and-fill, in code.
   // Runs before the calculated columns so a freshly created Tags column
   // lands ahead of Ageing/Working1/Working2/30sep26, matching the layout the
   // reports expect.
@@ -1744,14 +1744,14 @@ window.CreatePRP = (function () {
       ws.getCell(r, tagsCol).value = tag;
       if (tag === FINANCE_TAG) counts.finance++; else counts.cyber++;
       if ((r & 2047) === 0) {
-        progress('Tagging respondents — row ' + r.toLocaleString() + '…');
+        progress('Tagging respondents - row ' + r.toLocaleString() + '…');
         await _yield();
       }
     }
 
     if (counts.finance === 0) {
       warnings.push(SHEET_ASSESSMENT + ': no rows matched the Finance respondent (' +
-        headerUsed + ' column) — everything tagged ' + DEFAULT_TAG);
+        headerUsed + ' column) - everything tagged ' + DEFAULT_TAG);
     }
     return counts;
   }
@@ -1762,10 +1762,10 @@ window.CreatePRP = (function () {
     var agingCol = addColumn(ws, 'Aging');
     var todaySerial = serialFromDate(todayUTC());
     for (var r = 2; r <= ws.rowCount; r++) {
-      var n = serialOf(plainVal(ws.getCell(r, 14).value));  // column N — hardcoded like the Python
+      var n = serialOf(plainVal(ws.getCell(r, 14).value));  // column N - hardcoded like the Python
       var cellVal = { formula: 'NETWORKDAYS(N' + r + ',TODAY())' };
       if (n.kind !== 'text') cellVal.result = networkdaysSerial(n.serial, todaySerial);
-      else warnings.push(SHEET_RISK + ' row ' + r + ': N is text — Aging left to Excel');
+      else warnings.push(SHEET_RISK + ' row ' + r + ': N is text - Aging left to Excel');
       ws.getCell(r, agingCol).value = cellVal;
       if ((r & 2047) === 0) await _yield();
     }
@@ -1775,10 +1775,10 @@ window.CreatePRP = (function () {
   async function processAssessment(ws, warnings, onProgress) {
     var progress = onProgress || function () {};
 
-    // Step 1 — tag every populated row before anything is appended.
+    // Step 1 - tag every populated row before anything is appended.
     var tagCounts = await applyTags(ws, warnings, progress);
 
-    // Step 2 — the existing workflow, unchanged.
+    // Step 2 - the existing workflow, unchanged.
     progress('Adding assessment formulas…');
     await convertDateColumn(ws, findColumn(ws, 'Date created'));
     await convertDateColumn(ws, findColumn(ws, 'Date submitted'));
@@ -1798,10 +1798,10 @@ window.CreatePRP = (function () {
       // Ageing
       var ageing = { formula: 'NETWORKDAYS(N' + r + ',TODAY())' };
       if (n.kind !== 'text') ageing.result = networkdaysSerial(n.serial, todaySerial);
-      else warnings.push(SHEET_ASSESSMENT + ' row ' + r + ': N is text — Ageing left to Excel');
+      else warnings.push(SHEET_ASSESSMENT + ' row ' + r + ': N is text - Ageing left to Excel');
       ws.getCell(r, ageingCol).value = ageing;
 
-      // Working1 — Excel semantics: text "=" is case-insensitive; text > number
+      // Working1 - Excel semantics: text "=" is case-insensitive; text > number
       // ranks TRUE; blank compares as 0; blank cell equals "".
       var cTxt = (cRaw === null || cRaw === undefined) ? '' : String(cRaw).toLowerCase();
       var isDone = (cTxt === 'completed' || cTxt === 'under review');
@@ -1817,7 +1817,7 @@ window.CreatePRP = (function () {
       // Working2
       var w2 = { formula: 'IF(DATE(2026,9,30)-N' + r + '>=365,"Beyond 1 Year Overdue","Current")' };
       if (n.kind !== 'text') w2.result = (SEP26_SERIAL - n.serial >= 365) ? 'Beyond 1 Year Overdue' : 'Current';
-      else warnings.push(SHEET_ASSESSMENT + ' row ' + r + ': N is text — Working2 left to Excel');
+      else warnings.push(SHEET_ASSESSMENT + ' row ' + r + ': N is text - Working2 left to Excel');
       ws.getCell(r, working2Col).value = w2;
 
       // 30sep26
@@ -1839,7 +1839,7 @@ window.CreatePRP = (function () {
     return ws;
   }
 
-  // ── build — main(). files = { risk: File, assessment: File, tprm: File } ──
+  // ── build - main(). files = { risk: File, assessment: File, tprm: File } ──
   async function build(files, onProgress) {
     var progress = onProgress || function () {};
     var warnings = [];
@@ -1905,7 +1905,7 @@ window.CreatePRP = (function () {
 })();
 
 // ── Inlined: native-chart.js ───────────────────────────────────────────────
-// Native OOXML column-chart generator. Pure string builders — no I/O, no zip.
+// Native OOXML column-chart generator. Pure string builders - no I/O, no zip.
 // Turns a report's chart data (categories, series names/colors/values) into the
 // xl/charts/chartN.xml + xl/drawings/drawingN.xml parts that Excel opens as a
 // real, editable chart. Replaces the baked-PNG (renderStyledPng) embed.
@@ -2007,7 +2007,7 @@ window.CreatePRP = (function () {
     var catOrient = def.catReversed ? 'maxMin' : 'minMax';
     var valNumFmt = def.valNumFmt ? '<c:numFmt formatCode="' + def.valNumFmt + '" sourceLinked="0"/>' : '';
     // hideValAx mirrors xlsxwriter's set_y_axis({visible: False, major_gridlines:
-    // {visible: False}}) — used where the bars carry their own data labels and a
+    // {visible: False}}) - used where the bars carry their own data labels and a
     // second scale would only add noise. Default keeps the axis and gridlines.
     var valDelete = def.hideValAx ? '1' : '0';
     var valGridlines = def.hideValAx ? '' : '<c:majorGridlines/>';
@@ -2154,7 +2154,7 @@ window.CreatePRP = (function () {
         var drawPath = 'xl/drawings/drawing' + di + '.xml';
         var drawRels = 'xl/drawings/_rels/drawing' + di + '.xml.rels';
         // Reserve the drawing part NOW (overwritten at the end) so nextIndex()
-        // sees it when allocating the next sheet's drawing — otherwise a second
+        // sees it when allocating the next sheet's drawing - otherwise a second
         // sheet reuses drawing1 and its chart rel is clobbered.
         files[drawPath] = enc('');
         files[drawRels] = enc('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -2237,7 +2237,7 @@ window.Reports.d1 = async function d1(wb) {
     return year === 2026 && cat === 'TECHNOLOGY';
   });
 
-  // groupby("supplier_zone")["id"].count() — pandas .count() counts non-null values.
+  // groupby("supplier_zone")["id"].count() - pandas .count() counts non-null values.
   var groups = E.groupBy(filtered, function (r) { return r.supplier_zone; });
   var addedByZone = {};
   groups.forEach(function (zoneRows, zone) {
@@ -2264,7 +2264,7 @@ window.Reports.d1 = async function d1(wb) {
   // figure, blue/orange stacked bars, white in-bar value labels, bold white
   // title with the running total). The SAME config drives the live Plotly
   // "Chart preview" (via chartConfigs below) and mirrors the native Excel
-  // chart injected into the workbook — preview and file always match.
+  // chart injected into the workbook - preview and file always match.
   var zones = chartRows.map(function (r) { return r[0]; });
   var tier1Vals = chartRows.map(function (r) { return r[1]; });
   var addedVals = chartRows.map(function (r) { return r[2]; });
@@ -2342,12 +2342,12 @@ window.Reports.d1 = async function d1(wb) {
 // Reads "OneTrust Assessment", filters Tags=="cyber" (case-insensitive
 // exact match) & Date created year==2026, maps Stage to Closed/Open, maps
 // Organization to a display zone (falling back to the organization name
-// itself when unmapped — unlike s2a/s3d's zone_map, "Europe" stays
+// itself when unmapped - unlike s2a/s3d's zone_map, "Europe" stays
 // "Europe" here, not "EUR"), pivots Org Display x Final Stage (count, no
 // margins), sorts to a fixed zone order, appends a Grand Total row, and
 // computes a small KPI panel (3 static values + 1 computed Q2 rate).
 // Writes "output file D2.xlsx" as a single hand-built "Dashboard" sheet
-// (filter area, then the pivot table, then the KPI table below it) — the
+// (filter area, then the pivot table, then the KPI table below it) - the
 // exact row offsets matter because the existing preview pipeline re-treats
 // row 0 as headers and sparsity-trims the rest, same as s2a.
 window.Reports.d2 = async function d2(wb, opts) {
@@ -2371,11 +2371,11 @@ window.Reports.d2 = async function d2(wb, opts) {
     });
   });
 
-  // Dynamic Finance filter — names typed in the Generate card (shown for
+  // Dynamic Finance filter - names typed in the Generate card (shown for
   // Diagram 2 only). When names are given, a 2026 row whose Respondents cell
   // mentions ANY of them (case-insensitive substring, so 'A; B' cells match)
   // is Finance and excluded; every other 2026 row counts as Cyber, whatever
-  // its Tags say. With no names — box cleared — or no Respondents column to
+  // its Tags say. With no names - box cleared - or no Respondents column to
   // match against, the Tags column written at workbook-creation time decides,
   // exactly as before.
   var financeNames = ((opts && opts.financeRespondents) || []).map(function (n) {
@@ -2445,11 +2445,11 @@ window.Reports.d2 = async function d2(wb, opts) {
   // Script log line: which Finance filter actually ran, so a changed number
   // is never a mystery.
   var filterLog = dynamicFilter
-    ? 'Finance filter: dynamic — ' + excludedFinance + ' row(s) mentioning [' + financeNames.join(', ') +
+    ? 'Finance filter: dynamic - ' + excludedFinance + ' row(s) mentioning [' + financeNames.join(', ') +
       '] in "' + respCol + '" excluded; ' + recordTotal + ' remaining 2026 rows counted as Cyber.'
     : financeNames.length
-      ? 'Finance filter: names were given but no Respondents column was found — fell back to Tags == "cyber" (' + recordTotal + ' rows).'
-      : 'Finance filter: Tags column (Tags == "cyber") — ' + recordTotal + ' rows.';
+      ? 'Finance filter: names were given but no Respondents column was found - fell back to Tags == "cyber" (' + recordTotal + ' rows).'
+      : 'Finance filter: Tags column (Tags == "cyber") - ' + recordTotal + ' rows.';
   var q2_26 = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
   var KPI = [
     ["Baseline '25", 0.60, 'Static'],
@@ -2500,7 +2500,7 @@ window.Reports.d2 = async function d2(wb, opts) {
   // (chartConfigs in the return), so preview and file always match.
   var images = {};
 
-  // Chart 1: org-level stacked bar — black bg, Open (cyan) bottom + Closed
+  // Chart 1: org-level stacked bar - black bg, Open (cyan) bottom + Closed
   // (gold) top, white in-bar labels, rotated white x labels, hidden y axis,
   // top-center legend (Closed shown before Open, matching legend_order).
   var orgLabels = pivotRows.map(function (r) { return r.label; });
@@ -2526,7 +2526,7 @@ window.Reports.d2 = async function d2(wb, opts) {
   };
   images.org = await B.renderStyledPng(orgTraces, orgLayout, 560, 400);
 
-  // Chart 2: KPI horizontal bar — white bg, single blue series, 0-100% axis,
+  // Chart 2: KPI horizontal bar - white bg, single blue series, 0-100% axis,
   // percent value labels to the right of each bar, dashed x gridlines.
   var kpiMetrics = KPI.map(function (k) { return k[0]; });
   var kpiValues = KPI.map(function (k) { return k[1]; });
@@ -2566,7 +2566,7 @@ window.Reports.d2 = async function d2(wb, opts) {
     ok: true,
     stdout: filterLog,
     files: [{ name: 'output file D2.xlsx', bytes: buf, sheets: [{ name: 'Dashboard', grid: grid }] }],
-    // Preview shows the KPI chart only — matching what the preview always
+    // Preview shows the KPI chart only - matching what the preview always
     // showed; the org chart is still embedded in the Excel Dashboard.
     chartConfigs: {
       'Dashboard': { traces: kpiTraces, layout: kpiLayout },
@@ -2598,7 +2598,7 @@ window.Reports.d3 = async function d3(wb) {
   var w1Col = findCol('Working1');
   var w2Col = findCol('Working2');
   // stage_col/classify_stage only feed "Final Status", which is used purely
-  // as the pivot's *value* column for counting — its actual text (Completed/
+  // as the pivot's *value* column for counting - its actual text (Completed/
   // Open) never appears in the output, so it needn't be computed here.
 
   var filtered = rows.filter(function (r) {
@@ -2613,8 +2613,8 @@ window.Reports.d3 = async function d3(wb) {
     { margins: false }
   );
 
-  // The script charts a FIXED window of columns B:C — "ONLY Pending +
-  // Completed in 2026, exclude Grand Total column" — and colours series[0] red
+  // The script charts a FIXED window of columns B:C - "ONLY Pending +
+  // Completed in 2026, exclude Grand Total column" - and colours series[0] red
   // / series[1] orange, so it presumes both Working1 columns are present in
   // that order. pivot_table only emits the values that actually occur, so when
   // the filter yields just one of them (all-Pending data, say) that fixed
@@ -2630,7 +2630,7 @@ window.Reports.d3 = async function d3(wb) {
   });
 
   // Manual two-step Grand Total (matches `pivot["Grand Total"]=sum(axis=1)`
-  // then `pivot.loc["Grand Total"]=sum()` — column first, then row over the
+  // then `pivot.loc["Grand Total"]=sum()` - column first, then row over the
   // now-wider matrix). The sheet keeps all three columns: Completed, Pending
   // and Grand Total; only the CHART leaves the total out.
   var headers = W1_COLUMNS.concat(['Grand Total']);
@@ -2652,7 +2652,7 @@ window.Reports.d3 = async function d3(wb) {
 
   // Embedded chart reproduces the original openpyxl native stacked BarChart
   // (white background, "Completed in 2026"=red / "Pending"=orange, axis
-  // titles) — built from the pivot BEFORE the Grand Total column/row were
+  // titles) - built from the pivot BEFORE the Grand Total column/row were
   // appended, matching the original's Reference(min_col=2, max_col=3,
   // max_row=ws.max_row-1) which excludes both. Deviation from the Python
   // chart: white in-bar value labels (zeros hidden), same as d2/s3d.
@@ -2832,7 +2832,7 @@ window.Reports.s1c = async function s1c(wb) {
     zoneRows.map(function (r) { return r[0]; }), zoneRows.map(function (r) { return r[1]; }),
     'Active by Zone', 'Zone', 'Count'
   );
-  // Live Plotly previews of the same styled charts (no baked images) —
+  // Live Plotly previews of the same styled charts (no baked images) -
   // preview and the native Excel charts always match.
   var chartConfigs = { 'Summary': chart1, 'Active by Zone': chart2 };
 
@@ -2904,7 +2904,7 @@ window.Reports.s2a = async function s2a(wb) {
   var STAGE_ORDER = ['Completed', 'In progress', 'Not started', 'Under review'];
   // BEES / BEES | FINTECH / Growth variants are sanitized to 'GRO' before
   // the allow-list filter runs (E.sanitizeZone below), so they enter as the
-  // single 'GRO' org — one row in the pivot instead of two BEES rows.
+  // single 'GRO' org - one row in the pivot instead of two BEES rows.
   var ORG_ORDER = [
     'Africa', 'APAC', 'GRO', 'Europe', 'GHQ',
     'Middle America Zone', 'North America Zone', 'South America Zone',
@@ -3079,7 +3079,7 @@ window.Reports.s2a = async function s2a(wb) {
   // value labels, bold total label above each bar, bottom legend, dashed
   // gridlines) instead of the light in-page preview theme. Both charts are
   // embedded into the file (matching today's 2-chart-per-file output) even
-  // though the preview only ever surfaces the first one — confirmed with
+  // though the preview only ever surfaces the first one - confirmed with
   // the user as the intended behavior, not a bug to fix.
   function s2aChartTraces(zoneArr) {
     var zones = zoneArr.map(function (z) { return z.zone; });
@@ -3116,7 +3116,7 @@ window.Reports.s2a = async function s2a(wb) {
     };
   }
   // Live Plotly preview of the same styled chart (no baked image). Only the
-  // 'Auto Open Closed' sheet previews a chart — matching what the preview
+  // 'Auto Open Closed' sheet previews a chart - matching what the preview
   // always showed; the Overdue sheet's chart lives in the Excel file only.
   var chartConfigs = {};
   var oc = s2aChartTraces(zoneSummary);
@@ -3340,7 +3340,7 @@ window.Reports.s3d = async function s3d(wb) {
       margin: { t: 50, r: 20, b: 70, l: 50 },
     };
   }
-  // Live Plotly previews of the same styled charts (no baked images) —
+  // Live Plotly previews of the same styled charts (no baked images) -
   // preview and the native Excel charts always match.
   var chartConfigs = {};
   var oovDataRows = openVsOverdueGrid.slice(1);
@@ -3451,13 +3451,13 @@ window.S4History = (function () {
   'use strict';
   // Versioned: bump when a change makes rows written by a previous build
   // untrustworthy. Fixing how a period is DERIVED does not unsay a bad label
-  // that was already saved — a wrong month keeps being charted from storage
+  // that was already saved - a wrong month keeps being charted from storage
   // long after the code that produced it is gone, which is exactly how a "Dec
   // '26" and a "Jul '26" each outlived their fix. Nothing distinguishes a
   // poisoned row from a good one after the fact, so the whole generation is
   // retired rather than asking every user to find the Reset button.
-  //   v1 — clock-derived period ("Jul '26" beside May data)
-  //   v2 — max()-date period (one scheduled December date named the report)
+  //   v1 - clock-derived period ("Jul '26" beside May data)
+  //   v2 - max()-date period (one scheduled December date named the report)
   var KEY = 'prp.s4.history.v3';
   var STALE_KEYS = ['prp.s4.history.v1', 'prp.s4.history.v2'];
 
@@ -3476,7 +3476,7 @@ window.S4History = (function () {
     var s = store();
     if (!s) return null;
     try {
-      // Retired generations are dead weight, not fallbacks — drop them on sight
+      // Retired generations are dead weight, not fallbacks - drop them on sight
       // so a later key bump can never resurrect one.
       STALE_KEYS.forEach(function (k) { s.removeItem(k); });
       var raw = s.getItem(KEY);
@@ -3523,7 +3523,7 @@ window.Reports.s4 = async function s4(wb) {
   var TARGET_LABEL = "Target '26";
   var TARGET_PERCENT = 0.80;
   // A month must hold at least this share of the year's dated rows before it can
-  // name the reporting period — see getPeriodLabel. Mirrors PERIOD_MIN_SHARE in
+  // name the reporting period - see getPeriodLabel. Mirrors PERIOD_MIN_SHARE in
   // diagram4/automation.py; change both together.
   var PERIOD_MIN_SHARE = 0.05;
   var SEED_HISTORY_WHEN_MISSING = true;
@@ -3533,7 +3533,7 @@ window.Reports.s4 = async function s4(wb) {
   ];
   var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  // clean_column_name / normalize_stage — remove \r and \n, then strip. That is
+  // clean_column_name / normalize_stage - remove \r and \n, then strip. That is
   // all the script does, so that is all this does: a widened cleaner would make
   // this report count rows the reference output does not.
   function clean(v) {
@@ -3542,7 +3542,7 @@ window.Reports.s4 = async function s4(wb) {
     return String(v).replace(/[\r\n]/g, '').trim();
   }
 
-  // Name the sheet AND what the workbook actually contains — "not found" on its
+  // Name the sheet AND what the workbook actually contains - "not found" on its
   // own gives the user nothing to act on, and the script lists them too.
   if (wb && Array.isArray(wb.SheetNames) && wb.SheetNames.indexOf(SHEET_NAME) === -1) {
     throw new Error("Sheet '" + SHEET_NAME + "' not found. Available sheets: " + wb.SheetNames.join(', '));
@@ -3550,7 +3550,7 @@ window.Reports.s4 = async function s4(wb) {
   var sheet = E.readSheet(wb, SHEET_NAME);
   var cleanedHeaders = sheet.headers.map(clean);
 
-  // Two columns can carry the same header — an export that gained a replacement
+  // Two columns can carry the same header - an export that gained a replacement
   // "Stage" keeps the original beside it, usually empty. sheet_to_json dedupes
   // the row KEYS by occurrence (Stage, Stage_1), but re-keying by the cleaned
   // header collapsed them so only the FIRST was ever readable; a populated
@@ -3579,7 +3579,7 @@ window.Reports.s4 = async function s4(wb) {
   });
 
   // find_required_column: {clean(col).lower(): col} and an exact lookup. Not a
-  // fuzzy match — an earlier version matched on word tokens, so "Date Created
+  // fuzzy match - an earlier version matched on word tokens, so "Date Created
   // (UTC)" resolved where the script would have raised. Both date columns are
   // required, so an unresolved one stops the run instead of being worked around.
   var lowered = cleanedHeaders.map(function (h) { return h.toLowerCase(); });
@@ -3603,7 +3603,7 @@ window.Reports.s4 = async function s4(wb) {
   var riskCreated = rows.filter(function (r) { return E.excelYear(r[dateCreatedCol]) === YEAR; }).length;
   var targetValue = Math.round(totalRisk * TARGET_PERCENT);
 
-  // get_period_label — the reporting period is the LAST month in the file that
+  // get_period_label - the reporting period is the LAST month in the file that
   // carries real volume, and March maps to "Q1 '26". The clock is never
   // consulted, so the same workbook always produces the same label.
   //
@@ -3612,7 +3612,7 @@ window.Reports.s4 = async function s4(wb) {
   // whose data is May. A month holding at least PERIOD_MIN_SHARE of the year's
   // dated rows is a reporting month; anything after it is noise, and it is
   // named in the run summary rather than dropped quietly. The Python does the
-  // same — keep the two in step if either changes.
+  // same - keep the two in step if either changes.
   var monthTally = [], skippedMonths = [], chosenMonth = null, periodFloor = 0;
 
   function getPeriodLabel() {
@@ -3657,7 +3657,7 @@ window.Reports.s4 = async function s4(wb) {
     'Risk Created in 2026': riskCreated,
     'Target 80%': targetValue,
     'Closed %': totalRisk ? closedRisk / totalRisk : 0,
-    // os.path.basename(input_file) — the uploaded file's own name, threaded
+    // os.path.basename(input_file) - the uploaded file's own name, threaded
     // through by runReport; the placeholder only shows if it wasn't supplied.
     'Input File': (wb && wb.__fileName) || 'workbook.xlsx',
     'Processed On': processedOn,
@@ -3695,7 +3695,7 @@ window.Reports.s4 = async function s4(wb) {
   }
 
   // update_history (step 16): append only if this month isn't already present.
-  // Never overwrite — a re-run of the same month keeps the original figures.
+  // Never overwrite - a re-run of the same month keeps the original figures.
   var alreadyPresent = history.some(function (r) { return String(r.Month) === String(metrics.Month); });
   var historyUpdated = !alreadyPresent;
   if (historyUpdated) history = history.concat([metrics]);
@@ -3715,11 +3715,11 @@ window.Reports.s4 = async function s4(wb) {
   var sortedHistory = history.slice().sort(function (a, b) { return periodSortKey(a.Month) - periodSortKey(b.Month); });
   // This dashboard is "as on" the period THIS file describes, so a stored period
   // LATER than it cannot belong here. Left in, it takes one of the three chart
-  // columns and pushes a real period off the left edge — which is how a May
+  // columns and pushes a real period off the left edge - which is how a May
   // report kept showing Apr/May/Dec long after the December row that caused it
   // was fixed: the bad label was already saved, and fixing the derivation does
   // not unsay it. The row stays in history; it is simply not part of this
-  // report. Mirrored in diagram4/automation.py — change both together.
+  // report. Mirrored in diagram4/automation.py - change both together.
   var currentKey = periodSortKey(periodLabel);
   var laterPeriods = sortedHistory.filter(function (r) { return periodSortKey(r.Month) > currentKey; })
     .map(function (r) { return r.Month; });
@@ -3728,7 +3728,7 @@ window.Reports.s4 = async function s4(wb) {
   // Quarter roll-up (reference workflow steps 17-20): history keeps MONTHLY
   // rows, but a completed quarter displays as ONE column. A quarter is
   // complete when its ENDING month's row exists (Q2 <- Jun, Q3 <- Sep,
-  // Q4 <- Dec), and the quarter shows that ending month's numbers — a
+  // Q4 <- Dec), and the quarter shows that ending month's numbers - a
   // snapshot, not a sum, because these are cumulative as-on-date values.
   // Months of an incomplete quarter stay individual, so the display runs
   // "Q1, Q2, Jul, Aug" until September collapses it to "Q1, Q2, Q3". Q1
@@ -3844,7 +3844,7 @@ window.Reports.s4 = async function s4(wb) {
   //
   // Dashboard only. History's grid stays numeric because selectCharts('s4')
   // derives the preview chart from History.xlsx via chartableFromSheet, which
-  // picks its series by "is this column numeric" — stringifying Closed % there
+  // picks its series by "is this column numeric" - stringifying Closed % there
   // would silently drop a series from the chart.
   function renderPercents(grid, cells) {
     var out = grid.map(function (row) { return row.slice(); });
@@ -3868,7 +3868,7 @@ window.Reports.s4 = async function s4(wb) {
   // grid is 0-indexed, ExcelJS is 1-indexed.
   pctCells.forEach(function (rc) { wsDash.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
 
-  // ── Cell formatting — the xlsxwriter format objects, one for one ──
+  // ── Cell formatting - the xlsxwriter format objects, one for one ──
   // header_fmt / left_fmt gold, peach_fmt on the calculation labels, thin
   // borders throughout, body numbers right-aligned. Number formats are left
   // alone: PCT_FMT above already covers every percent cell.
@@ -3884,7 +3884,7 @@ window.Reports.s4 = async function s4(wb) {
     if (o.align) cell.alignment = o.align;
   }
 
-  // Matrix: gold header row, gold row labels down column A, bordered body —
+  // Matrix: gold header row, gold row labels down column A, bordered body -
   // applied to blank cells too, as the script does, so the grid stays unbroken.
   var nCols = tableHeaders.length;
   for (var hc = 1; hc <= nCols; hc++) fmt(1, hc, { fill: GOLD, bold: true, border: true, align: CENTER });
@@ -3913,7 +3913,7 @@ window.Reports.s4 = async function s4(wb) {
   });
 
   // set_column(0,0,28) / set_column(1,6,14). xlsxwriter stores a requested
-  // width plus its own padding, so these are the values that land on disk —
+  // width plus its own padding, so these are the values that land on disk -
   // a bare 28/14 here would render narrower than the script's output.
   wsDash.getColumn(1).width = 28.7109375;
   for (var wc = 2; wc <= 7; wc++) wsDash.getColumn(wc).width = 14.7109375;
@@ -3935,7 +3935,7 @@ window.Reports.s4 = async function s4(wb) {
         grouping: 'clustered', legend: false, title: 'Cumulative Risk Treatment Progress',
         chartBg: '000000', plotBg: '000000', axisColor: 'FFFFFF',
         // set_y_axis({visible: False, major_gridlines: {visible: False}}) and
-        // set_x_axis({label_position: "low"}) — the bars carry their own labels.
+        // set_x_axis({label_position: "low"}) - the bars carry their own labels.
         hideValAx: true, catTickLblPos: 'low',
         dataLabels: { position: 'ctr', color: 'FFFFFF' },
         categories: { ref: R(DASH_SHEET, 1, s4First, s4Last), cache: calcLabels },
@@ -3953,7 +3953,7 @@ window.Reports.s4 = async function s4(wb) {
   histPctCells.forEach(function (rc) { wsHistUsed.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
 
   // Display History (workflow step 23): the rolled-up period list the chart
-  // and matrix actually used — quarters where complete, months elsewhere.
+  // and matrix actually used - quarters where complete, months elsewhere.
   var DISPLAY_SHEET = 'Display History';
   var displayGrid = [['Period', 'Open risk as on date', 'Closed Risk in 2026', 'Total Risk', 'Risk Created in 2026', 'Closed %']]
     .concat(displayHistory.map(function (d) {
@@ -3986,7 +3986,7 @@ window.Reports.s4 = async function s4(wb) {
   // straight through and the results view renders it in the "Script log"
   // panel, which until now always read "No console output."
   var storageNote = !storageOk
-    ? 'unavailable (private mode or file:// restrictions) — this run will not be remembered'
+    ? 'unavailable (private mode or file:// restrictions) - this run will not be remembered'
     : historySaved
       ? 'saved to browser storage · ' + history.length + ' period' + (history.length === 1 ? '' : 's') + ' held'
       : 'could not be saved (storage full or blocked)';
@@ -4002,15 +4002,15 @@ window.Reports.s4 = async function s4(wb) {
     'Created/updated: ' + OUTPUT_FILE,
     'Created/updated: ' + HISTORY_FILE,
     '',
-    // Everything below is browser-side context — it explains the label rather
+    // Everything below is browser-side context - it explains the label rather
     // than changing it. The tally matters most: it shows which month the period
     // came from and, when a later month was ignored, that the rows exist.
     'Duplicate columns: ' + (dupHeaders.length
       ? dupHeaders.join(', ') + '   (first non-blank value per row is used)' : 'none'),
-    'Reporting period: ' + MONTH_ABBR[chosenMonth - 1] + ' — the last month in ' +
+    'Reporting period: ' + MONTH_ABBR[chosenMonth - 1] + ' - the last month in ' +
       dateCreatedCol + ' / ' + dateClosedCol + ' holding at least ' + periodFloor + ' rows',
     'Dates by month in file: ' + monthTally.join(', ') +
-      (skippedMonths.length ? '   — ignored as noise: ' + skippedMonths.join(', ') : ''),
+      (skippedMonths.length ? '   - ignored as noise: ' + skippedMonths.join(', ') : ''),
     'Target arithmetic: ' + Math.round(TARGET_PERCENT * 100) + '% of Total Risk (' + openRisk +
       ' open + ' + closedRisk + ' closed = ' + totalRisk + ') = ' + targetValue,
     'History loaded from: ' + historySource,
@@ -4020,10 +4020,10 @@ window.Reports.s4 = async function s4(wb) {
     'Periods in chart: ' + periodLabels.join(', ') + '  (last 3 of ' + displayHistory.length + ' display periods)',
   ];
   if (laterPeriods.length) {
-    // The "  ^ " prefix is what makes the shell open the Script log by itself —
+    // The "  ^ " prefix is what makes the shell open the Script log by itself -
     // a period silently dropped from the chart must not go unmentioned.
     lines.push('  ^ Held but not charted: ' + laterPeriods.join(', ') +
-      '   (later than ' + periodLabel + ', this file\'s period — use Reset to clear them)');
+      '   (later than ' + periodLabel + ', this file\'s period - use Reset to clear them)');
   }
   var stdout = lines.join('\n');
 
@@ -4070,13 +4070,13 @@ window.Reports.s4 = async function s4(wb) {
 // Registry
 // ---------------------------------------------------------------------------
 const REGISTRY = [
-  { id:"d1",  group:"Diagram 1 — Suppliers",       label:"Zone-wise Tier-1 Suppliers (2026 Technology filter) + chart",             sheet:"TPRM Web-Portal Export",  notes:"Filters 2026 + TECHNOLOGY, merges static Tier-1 data, embeds a matplotlib chart." },
-  { id:"d2",  group:"Diagram 2 — Assessments",     label:"Cyber assessments 2026: Open vs Closed by zone + KPI charts",             sheet:"OneTrust Assessment",      notes:"Tags=Cyber & year 2026, Open/Closed pivot, Q2 KPI, two native Excel charts." },
-  { id:"d3",  group:"Diagram 3 — Assessments",     label:"Beyond-1-year-overdue assessments: Completed vs Open pivot + chart",      sheet:"OneTrust Assessment",      notes:"Has an absolute path baked in — this build rewrites it to run locally." },
-  { id:"s4",  group:"Diagram 4 — Risk Dashboard",  label:"Cumulative Risk Treatment Progress + History",                            sheet:"OneTrust - Risk Export",   notes:"Bar chart of open risks vs baseline/target; outputs Risk_Output.xlsx + History.xlsx." },
-  { id:"s1c", group:"Slide 12 · 1st — Suppliers",   label:"Status Overview + Active-by-Zone (combines ACTIVE/Active)",         sheet:"TPRM Web-Portal Export",  notes:"Most robust 1st-diagram variant: merges case-variant Active columns." },
-  { id:"s2a", group:"Slide 12 · 2nd — Assessments", label:"Open vs Closed by Zone (pivot + stacked chart)",                    sheet:"OneTrust Assessment",      notes:"Appends two summary sheets to a copy of the workbook." },
-  { id:"s3d", group:"Slide 12 · 3rd — Risks",       label:"Open/Overdue pivot (Aging > 90 days) — most complete risk report", sheet:"OneTrust - Risk Export", notes:"Most robust 3rd-diagram variant: numeric Aging>90 rule, column auto-detect." },
+  { id:"d1",  group:"Diagram 1 - Suppliers",       label:"Zone-wise Tier-1 Suppliers (2026 Technology filter) + chart",             sheet:"TPRM Web-Portal Export",  notes:"Filters 2026 + TECHNOLOGY, merges static Tier-1 data, embeds a matplotlib chart." },
+  { id:"d2",  group:"Diagram 2 - Assessments",     label:"Cyber assessments 2026: Open vs Closed by zone + KPI charts",             sheet:"OneTrust Assessment",      notes:"Tags=Cyber & year 2026, Open/Closed pivot, Q2 KPI, two native Excel charts." },
+  { id:"d3",  group:"Diagram 3 - Assessments",     label:"Beyond-1-year-overdue assessments: Completed vs Open pivot + chart",      sheet:"OneTrust Assessment",      notes:"Has an absolute path baked in - this build rewrites it to run locally." },
+  { id:"s4",  group:"Diagram 4 - Risk Dashboard",  label:"Cumulative Risk Treatment Progress + History",                            sheet:"OneTrust - Risk Export",   notes:"Bar chart of open risks vs baseline/target; outputs Risk_Output.xlsx + History.xlsx." },
+  { id:"s1c", group:"Slide 12 · 1st - Suppliers",   label:"Status Overview + Active-by-Zone (combines ACTIVE/Active)",         sheet:"TPRM Web-Portal Export",  notes:"Most robust 1st-diagram variant: merges case-variant Active columns." },
+  { id:"s2a", group:"Slide 12 · 2nd - Assessments", label:"Open vs Closed by Zone (pivot + stacked chart)",                    sheet:"OneTrust Assessment",      notes:"Appends two summary sheets to a copy of the workbook." },
+  { id:"s3d", group:"Slide 12 · 3rd - Risks",       label:"Open/Overdue pivot (Aging > 90 days) - most complete risk report", sheet:"OneTrust - Risk Export", notes:"Most robust 3rd-diagram variant: numeric Aging>90 rule, column auto-detect." },
 ];
 
 const GROUPS = {};
@@ -4161,7 +4161,7 @@ function renderNav() {
 function setupNavToggle() {
   const btn = document.getElementById('nav-toggle');
   const drawer = document.getElementById('nav-drawer');
-  // `inert` keeps the collapsed report list out of the tab order — pointer-events
+  // `inert` keeps the collapsed report list out of the tab order - pointer-events
   // alone would still let a keyboard user land on invisible buttons.
   drawer.inert = true;
   function close(returnFocus) {
@@ -4440,7 +4440,7 @@ function renderResults() {
   });
 
   // Log. Opened when the run failed, and also when a report flags a number it
-  // could not vouch for — a report marks that with a "  ^ " line in stdout.
+  // could not vouch for - a report marks that with a "  ^ " line in stdout.
   // A KPI of 0% that means "the filter matched nothing" is indistinguishable
   // from a real 0% on the chart, and behind a collapsed panel the explanation
   // went unread through four rounds of bug reports.
@@ -4477,13 +4477,13 @@ function renderResults() {
     dlWrap.appendChild(a);
   });
 
-  // Copy button — copies a real table, exactly like drag-selecting the cells
+  // Copy button - copies a real table, exactly like drag-selecting the cells
   // in Excel and pressing Ctrl+C. We put BOTH representations on the clipboard:
   //   • text/html  → an actual <table>, so Excel / Google Sheets / Word / email
   //                   paste it as proper rows and columns of cells.
   //   • text/plain → tab-separated (TSV), so plain editors still get columns.
   // The old version wrote plain text only, which pastes as one run of tabs
-  // (no cells) in rich targets — that's the "not coming off properly" bug.
+  // (no cells) in rich targets - that's the "not coming off properly" bug.
   const copyBtn = document.getElementById('copy-btn');
   if (copyBtn && d.copy_tsv) {
     copyBtn.addEventListener('click', function() {
@@ -4507,7 +4507,7 @@ function renderResults() {
         return html + '</table>';
       };
       // Fallback: select a real DOM table and let the browser copy it. This is
-      // the exact same mechanism as Ctrl+C on selected spreadsheet cells — the
+      // the exact same mechanism as Ctrl+C on selected spreadsheet cells - the
       // browser derives BOTH text/html and text/plain from the selection. Works
       // on file:// and other origins where navigator.clipboard is unavailable.
       const copyViaSelection = function() {
@@ -4548,7 +4548,7 @@ function renderResults() {
   }
 
   // Render Plotly charts for browser preview. A sheet with a chartConfig
-  // renders the report's own styled traces/layout LIVE — the exact chart
+  // renders the report's own styled traces/layout LIVE - the exact chart
   // that lands in the Excel output (one or several per sheet, stacked).
   // Sheets without one fall back to the generic auto-derived chart.
   d.sheets.forEach(function(sheet, si) {
@@ -4579,7 +4579,7 @@ function renderResults() {
 // Table HTML
 // ---------------------------------------------------------------------------
 // A column is numeric only if EVERY value in it that isn't blank reads as a
-// number — counts, percentages, thousands-separated figures, negatives. One
+// number - counts, percentages, thousands-separated figures, negatives. One
 // stray label ("Grand Total", "n/a") and the column stays left-aligned, which is
 // the right call: half-aligned columns are worse than none.
 function isNumericCell(v) {
@@ -4616,7 +4616,7 @@ function tableHtml(headers, rows, totalRows) {
   });
   h += '</tbody></table></div>';
   if (totalRows > 50) {
-    h += '<div class="table-hint">Showing 50 of ' + totalRows + ' rows — download .xlsx for full dataset.</div>';
+    h += '<div class="table-hint">Showing 50 of ' + totalRows + ' rows - download .xlsx for full dataset.</div>';
   }
   return h;
 }
@@ -4664,7 +4664,7 @@ function buildBar(chartData, title) {
 // Re-themes a report's Excel-styled chart config for the in-app preview:
 // the chart's SUBSTANCE (series, values, stacking, bar labels, annotations,
 // axis ranges) is untouched, but the presentation becomes the app's usual
-// chart look — transparent panel background, theme fonts and gridlines, and
+// chart look - transparent panel background, theme fonts and gridlines, and
 // every series recolored to the app's gold/green palette (the Excel file
 // keeps each chart's original colors).
 function _themeAxis(src, base) {
@@ -4694,7 +4694,7 @@ function _themeChartConfig(cfg) {
       return Object.assign({}, a, { font:{ family:_CHART_FONT, color:light, size:11 } });
     });
   }
-  const pal = [_FILL[0], _FILL[1]]; // gold, green — series recolored per trace
+  const pal = [_FILL[0], _FILL[1]]; // gold, green - series recolored per trace
   const traces = (cfg.traces || []).map(function(tr, ti) {
     const t = Object.assign({}, tr);
     // Per-bar color arrays (d4: grey ends, gold middles) keep their own colors.
@@ -4748,7 +4748,7 @@ function b64ToBytes(b64) {
   return bytes;
 }
 
-// ── Inlined: hero.js — Hero — Create PRP builder UI + GSAP choreography ──────────────────────
+// ── Inlined: hero.js - Hero - Create PRP builder UI + GSAP choreography ──────────────────────
 // The builder drives window.CreatePRP and hands the generated workbook to the
 // existing pipeline via handleFileChange(). Animations are strictly
 // progressive enhancement: nothing is hidden in CSS, all entrances are GSAP
@@ -4831,7 +4831,7 @@ function b64ToBytes(b64) {
   }
 
   function assign(kind, file) {
-    // Last file wins, like the Python folder scan — but say so.
+    // Last file wins, like the Python folder scan - but say so.
     if (H.files[kind]) setStatus('Replaced ' + KIND_LABEL[kind] + ' with "' + file.name + '"');
     H.files[kind] = file;
   }
@@ -4937,7 +4937,7 @@ function b64ToBytes(b64) {
     renderSlots();
   };
 
-  // ── Arrival motion — idempotent; callable from the vendor loader and from
+  // ── Arrival motion - idempotent; callable from the vendor loader and from
   // init(), whichever lands last with everything in place wins.
   //
   // This is a tool, not a landing page, so there is no orchestrated load
@@ -4952,7 +4952,7 @@ function b64ToBytes(b64) {
     if (!window.gsap) return;
     var hero = document.querySelector('.hero-inner');
     if (!hero) return;
-    // Wait for the boot overlay to clear — otherwise the entrance plays unseen.
+    // Wait for the boot overlay to clear - otherwise the entrance plays unseen.
     var overlay = document.getElementById('prp-load-overlay');
     if (overlay && overlay.style.display !== 'none') return;
     _heroAnimated = true;
@@ -4993,7 +4993,7 @@ async function init() {
 
   updateRunBtn();
 
-  // Hero — Create PRP builder + scroll choreography (progressive enhancement)
+  // Hero - Create PRP builder + scroll choreography (progressive enhancement)
   setupHeroBuilder();
   tryInitHeroAnimations();
 }

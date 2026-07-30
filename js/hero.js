@@ -1,4 +1,4 @@
-// ── Hero — Create PRP builder UI + GSAP choreography ──────────────────────
+// ── Hero - Create PRP builder UI + GSAP choreography ──────────────────────
 // The builder drives window.CreatePRP and hands the generated workbook to the
 // existing pipeline via handleFileChange(). Animations are strictly
 // progressive enhancement: nothing is hidden in CSS, all entrances are GSAP
@@ -81,7 +81,7 @@
   }
 
   function assign(kind, file) {
-    // Last file wins, like the Python folder scan — but say so.
+    // Last file wins, like the Python folder scan - but say so.
     if (H.files[kind]) setStatus('Replaced ' + KIND_LABEL[kind] + ' with "' + file.name + '"');
     H.files[kind] = file;
   }
@@ -187,7 +187,7 @@
     renderSlots();
   };
 
-  // ── Arrival motion — idempotent; callable from the vendor loader and from
+  // ── Arrival motion - idempotent; callable from the vendor loader and from
   // init(), whichever lands last with everything in place wins.
   //
   // This is a tool, not a landing page, so there is no orchestrated load
@@ -202,7 +202,7 @@
     if (!window.gsap) return;
     var hero = document.querySelector('.hero-inner');
     if (!hero) return;
-    // Wait for the boot overlay to clear — otherwise the entrance plays unseen.
+    // Wait for the boot overlay to clear - otherwise the entrance plays unseen.
     var overlay = document.getElementById('prp-load-overlay');
     if (overlay && overlay.style.display !== 'none') return;
     _heroAnimated = true;

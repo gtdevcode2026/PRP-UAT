@@ -2,12 +2,12 @@
 // Reads "OneTrust Assessment", filters Tags=="cyber" (case-insensitive
 // exact match) & Date created year==2026, maps Stage to Closed/Open, maps
 // Organization to a display zone (falling back to the organization name
-// itself when unmapped — unlike s2a/s3d's zone_map, "Europe" stays
+// itself when unmapped - unlike s2a/s3d's zone_map, "Europe" stays
 // "Europe" here, not "EUR"), pivots Org Display x Final Stage (count, no
 // margins), sorts to a fixed zone order, appends a Grand Total row, and
 // computes a small KPI panel (3 static values + 1 computed Q2 rate).
 // Writes "output file D2.xlsx" as a single hand-built "Dashboard" sheet
-// (filter area, then the pivot table, then the KPI table below it) — the
+// (filter area, then the pivot table, then the KPI table below it) - the
 // exact row offsets matter because the existing preview pipeline re-treats
 // row 0 as headers and sparsity-trims the rest, same as s2a.
 window.Reports.d2 = async function d2(wb, opts) {
@@ -31,11 +31,11 @@ window.Reports.d2 = async function d2(wb, opts) {
     });
   });
 
-  // Dynamic Finance filter — names typed in the Generate card (shown for
+  // Dynamic Finance filter - names typed in the Generate card (shown for
   // Diagram 2 only). When names are given, a 2026 row whose Respondents cell
   // mentions ANY of them (case-insensitive substring, so 'A; B' cells match)
   // is Finance and excluded; every other 2026 row counts as Cyber, whatever
-  // its Tags say. With no names — box cleared — or no Respondents column to
+  // its Tags say. With no names - box cleared - or no Respondents column to
   // match against, the Tags column written at workbook-creation time decides,
   // exactly as before.
   var financeNames = ((opts && opts.financeRespondents) || []).map(function (n) {
@@ -105,11 +105,11 @@ window.Reports.d2 = async function d2(wb, opts) {
   // Script log line: which Finance filter actually ran, so a changed number
   // is never a mystery.
   var filterLog = dynamicFilter
-    ? 'Finance filter: dynamic — ' + excludedFinance + ' row(s) mentioning [' + financeNames.join(', ') +
+    ? 'Finance filter: dynamic - ' + excludedFinance + ' row(s) mentioning [' + financeNames.join(', ') +
       '] in "' + respCol + '" excluded; ' + recordTotal + ' remaining 2026 rows counted as Cyber.'
     : financeNames.length
-      ? 'Finance filter: names were given but no Respondents column was found — fell back to Tags == "cyber" (' + recordTotal + ' rows).'
-      : 'Finance filter: Tags column (Tags == "cyber") — ' + recordTotal + ' rows.';
+      ? 'Finance filter: names were given but no Respondents column was found - fell back to Tags == "cyber" (' + recordTotal + ' rows).'
+      : 'Finance filter: Tags column (Tags == "cyber") - ' + recordTotal + ' rows.';
   var q2_26 = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
   var KPI = [
     ["Baseline '25", 0.60, 'Static'],
@@ -160,7 +160,7 @@ window.Reports.d2 = async function d2(wb, opts) {
   // (chartConfigs in the return), so preview and file always match.
   var images = {};
 
-  // Chart 1: org-level stacked bar — black bg, Open (cyan) bottom + Closed
+  // Chart 1: org-level stacked bar - black bg, Open (cyan) bottom + Closed
   // (gold) top, white in-bar labels, rotated white x labels, hidden y axis,
   // top-center legend (Closed shown before Open, matching legend_order).
   var orgLabels = pivotRows.map(function (r) { return r.label; });
@@ -186,7 +186,7 @@ window.Reports.d2 = async function d2(wb, opts) {
   };
   images.org = await B.renderStyledPng(orgTraces, orgLayout, 560, 400);
 
-  // Chart 2: KPI horizontal bar — white bg, single blue series, 0-100% axis,
+  // Chart 2: KPI horizontal bar - white bg, single blue series, 0-100% axis,
   // percent value labels to the right of each bar, dashed x gridlines.
   var kpiMetrics = KPI.map(function (k) { return k[0]; });
   var kpiValues = KPI.map(function (k) { return k[1]; });
@@ -226,7 +226,7 @@ window.Reports.d2 = async function d2(wb, opts) {
     ok: true,
     stdout: filterLog,
     files: [{ name: 'output file D2.xlsx', bytes: buf, sheets: [{ name: 'Dashboard', grid: grid }] }],
-    // Preview shows the KPI chart only — matching what the preview always
+    // Preview shows the KPI chart only - matching what the preview always
     // showed; the org chart is still embedded in the Excel Dashboard.
     chartConfigs: {
       'Dashboard': { traces: kpiTraces, layout: kpiLayout },

@@ -1,14 +1,14 @@
-// ── CreatePRP — in-browser port of create_prp.py ──────────────────────────
+// ── CreatePRP - in-browser port of create_prp.py ──────────────────────────
 // Merges the 3 raw exports (risk-export / assessment-export / tprm|supplier)
 // into the consolidated PRP workbook the report pipeline consumes.
 //
 // Intentional deviations from create_prp.py:
 //  · TPRM sheet is named 'TPRM Web-Portal Export' (the Python writes
 //    'TPRM WebApp Portal', but reports d1/s1c and the shipped sample output
-//    read 'TPRM Web-Portal Export' — the Python name appears to be drift).
+//    read 'TPRM Web-Portal Export' - the Python name appears to be drift).
 //  · Every appended formula cell also carries its computed result
-//    ({formula, result}) so the in-browser reports — which read cached
-//    values, never recalculate — see real data. Excel still recalculates on
+//    ({formula, result}) so the in-browser reports - which read cached
+//    values, never recalculate - see real data. Excel still recalculates on
 //    open (calcProperties.fullCalcOnLoad), keeping TODAY() fresh.
 //  · Tags are resolved via findOrAddColumn (case-insensitive) rather than
 //    addColumn, so a source header of 'tags' is overwritten in place instead
@@ -17,7 +17,7 @@ window.CreatePRP = (function () {
   'use strict';
 
   var SHEET_RISK = 'OneTrust - Risk Export';
-  var SHEET_TPRM = 'TPRM Web-Portal Export';   // deviation — see header comment
+  var SHEET_TPRM = 'TPRM Web-Portal Export';   // deviation - see header comment
   var SHEET_ASSESSMENT = 'OneTrust Assessment';
   var OUTPUT_NAME = 'PRP Sample Jun (2).xlsx';
 
@@ -38,7 +38,7 @@ window.CreatePRP = (function () {
 
   function _yield() { return new Promise(function (res) { setTimeout(res, 0); }); }
 
-  // ── classify — mirrors find_source_files()'s filename checks ────────────
+  // ── classify - mirrors find_source_files()'s filename checks ────────────
   function classify(fileName) {
     var lower = String(fileName || '').toLowerCase();
     if (!/\.xlsx$/.test(lower)) return null;
@@ -48,7 +48,7 @@ window.CreatePRP = (function () {
     return null;
   }
 
-  // ── date parsing — the 5 strptime formats, in the Python's order ────────
+  // ── date parsing - the 5 strptime formats, in the Python's order ────────
   // %Y is exactly 4 digits; day/month accept 1-2; invalid calendar dates
   // (31/02/…) fall through to the next format, like strptime raising.
   var DATE_FORMATS = [
@@ -132,7 +132,7 @@ window.CreatePRP = (function () {
     return plainVal(v);
   }
 
-  // ── copy_sheet — coordinate-preserving value copy ───────────────────────
+  // ── copy_sheet - coordinate-preserving value copy ───────────────────────
   async function copySheet(src, target, progress, label) {
     var rows = src.rowCount, cols = src.columnCount;
     for (var r = 1; r <= rows; r++) {
@@ -149,7 +149,7 @@ window.CreatePRP = (function () {
         if (nv instanceof Date) cell.numFmt = 'yyyy-mm-dd h:mm:ss';
       }
       if ((r & 2047) === 0) {
-        progress('Copying ' + label + ' — row ' + r.toLocaleString() + ' of ' + rows.toLocaleString() + '…');
+        progress('Copying ' + label + ' - row ' + r.toLocaleString() + ' of ' + rows.toLocaleString() + '…');
         await _yield();
       }
     }
@@ -175,7 +175,7 @@ window.CreatePRP = (function () {
   }
   // Case-insensitive reuse. Used for Tags only: unlike Ageing/Working1/… the
   // Tags column already exists in the export, and its casing is whatever
-  // OneTrust emitted — an exact-match miss would append a duplicate column
+  // OneTrust emitted - an exact-match miss would append a duplicate column
   // and leave the real one stale.
   function findOrAddColumn(ws, headerName) {
     var existing = findColumn(ws, headerName);
@@ -185,7 +185,7 @@ window.CreatePRP = (function () {
     return newCol;
   }
 
-  // True when the row holds nothing at all — interior blanks in the export
+  // True when the row holds nothing at all - interior blanks in the export
   // must not pick up a default tag just for occupying a row number.
   function isEmptyRow(ws, r) {
     var vals = ws.getRow(r).values;
@@ -221,7 +221,7 @@ window.CreatePRP = (function () {
     return DEFAULT_TAG;
   }
 
-  // Overwrites Tags for every populated row — the filter-and-fill, in code.
+  // Overwrites Tags for every populated row - the filter-and-fill, in code.
   // Runs before the calculated columns so a freshly created Tags column
   // lands ahead of Ageing/Working1/Working2/30sep26, matching the layout the
   // reports expect.
@@ -247,14 +247,14 @@ window.CreatePRP = (function () {
       ws.getCell(r, tagsCol).value = tag;
       if (tag === FINANCE_TAG) counts.finance++; else counts.cyber++;
       if ((r & 2047) === 0) {
-        progress('Tagging respondents — row ' + r.toLocaleString() + '…');
+        progress('Tagging respondents - row ' + r.toLocaleString() + '…');
         await _yield();
       }
     }
 
     if (counts.finance === 0) {
       warnings.push(SHEET_ASSESSMENT + ': no rows matched the Finance respondent (' +
-        headerUsed + ' column) — everything tagged ' + DEFAULT_TAG);
+        headerUsed + ' column) - everything tagged ' + DEFAULT_TAG);
     }
     return counts;
   }
@@ -265,10 +265,10 @@ window.CreatePRP = (function () {
     var agingCol = addColumn(ws, 'Aging');
     var todaySerial = serialFromDate(todayUTC());
     for (var r = 2; r <= ws.rowCount; r++) {
-      var n = serialOf(plainVal(ws.getCell(r, 14).value));  // column N — hardcoded like the Python
+      var n = serialOf(plainVal(ws.getCell(r, 14).value));  // column N - hardcoded like the Python
       var cellVal = { formula: 'NETWORKDAYS(N' + r + ',TODAY())' };
       if (n.kind !== 'text') cellVal.result = networkdaysSerial(n.serial, todaySerial);
-      else warnings.push(SHEET_RISK + ' row ' + r + ': N is text — Aging left to Excel');
+      else warnings.push(SHEET_RISK + ' row ' + r + ': N is text - Aging left to Excel');
       ws.getCell(r, agingCol).value = cellVal;
       if ((r & 2047) === 0) await _yield();
     }
@@ -278,10 +278,10 @@ window.CreatePRP = (function () {
   async function processAssessment(ws, warnings, onProgress) {
     var progress = onProgress || function () {};
 
-    // Step 1 — tag every populated row before anything is appended.
+    // Step 1 - tag every populated row before anything is appended.
     var tagCounts = await applyTags(ws, warnings, progress);
 
-    // Step 2 — the existing workflow, unchanged.
+    // Step 2 - the existing workflow, unchanged.
     progress('Adding assessment formulas…');
     await convertDateColumn(ws, findColumn(ws, 'Date created'));
     await convertDateColumn(ws, findColumn(ws, 'Date submitted'));
@@ -301,10 +301,10 @@ window.CreatePRP = (function () {
       // Ageing
       var ageing = { formula: 'NETWORKDAYS(N' + r + ',TODAY())' };
       if (n.kind !== 'text') ageing.result = networkdaysSerial(n.serial, todaySerial);
-      else warnings.push(SHEET_ASSESSMENT + ' row ' + r + ': N is text — Ageing left to Excel');
+      else warnings.push(SHEET_ASSESSMENT + ' row ' + r + ': N is text - Ageing left to Excel');
       ws.getCell(r, ageingCol).value = ageing;
 
-      // Working1 — Excel semantics: text "=" is case-insensitive; text > number
+      // Working1 - Excel semantics: text "=" is case-insensitive; text > number
       // ranks TRUE; blank compares as 0; blank cell equals "".
       var cTxt = (cRaw === null || cRaw === undefined) ? '' : String(cRaw).toLowerCase();
       var isDone = (cTxt === 'completed' || cTxt === 'under review');
@@ -320,7 +320,7 @@ window.CreatePRP = (function () {
       // Working2
       var w2 = { formula: 'IF(DATE(2026,9,30)-N' + r + '>=365,"Beyond 1 Year Overdue","Current")' };
       if (n.kind !== 'text') w2.result = (SEP26_SERIAL - n.serial >= 365) ? 'Beyond 1 Year Overdue' : 'Current';
-      else warnings.push(SHEET_ASSESSMENT + ' row ' + r + ': N is text — Working2 left to Excel');
+      else warnings.push(SHEET_ASSESSMENT + ' row ' + r + ': N is text - Working2 left to Excel');
       ws.getCell(r, working2Col).value = w2;
 
       // 30sep26
@@ -342,7 +342,7 @@ window.CreatePRP = (function () {
     return ws;
   }
 
-  // ── build — main(). files = { risk: File, assessment: File, tprm: File } ──
+  // ── build - main(). files = { risk: File, assessment: File, tprm: File } ──
   async function build(files, onProgress) {
     var progress = onProgress || function () {};
     var warnings = [];

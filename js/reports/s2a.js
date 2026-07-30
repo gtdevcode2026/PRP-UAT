@@ -4,7 +4,7 @@
 // aggregates to a Zone-level Closed/Open summary (merging duplicate mapped
 // zones), and builds a separate Ageing>=90 "overdue" version of the same
 // zone summary. Writes "OneTrust_Report.xlsx" with 3 sheets, each a
-// hand-built cell grid (title/rule rows above the real table) — mirrored
+// hand-built cell grid (title/rule rows above the real table) - mirrored
 // exactly here, including the blank/title rows, since the existing preview
 // pipeline's "row 0 = header" + sparsity-trim transform depends on that
 // same messy raw structure for byte-for-byte parity with today's app.
@@ -15,7 +15,7 @@ window.Reports.s2a = async function s2a(wb) {
   var STAGE_ORDER = ['Completed', 'In progress', 'Not started', 'Under review'];
   // BEES / BEES | FINTECH / Growth variants are sanitized to 'GRO' before
   // the allow-list filter runs (E.sanitizeZone below), so they enter as the
-  // single 'GRO' org — one row in the pivot instead of two BEES rows.
+  // single 'GRO' org - one row in the pivot instead of two BEES rows.
   var ORG_ORDER = [
     'Africa', 'APAC', 'GRO', 'Europe', 'GHQ',
     'Middle America Zone', 'North America Zone', 'South America Zone',
@@ -190,7 +190,7 @@ window.Reports.s2a = async function s2a(wb) {
   // value labels, bold total label above each bar, bottom legend, dashed
   // gridlines) instead of the light in-page preview theme. Both charts are
   // embedded into the file (matching today's 2-chart-per-file output) even
-  // though the preview only ever surfaces the first one — confirmed with
+  // though the preview only ever surfaces the first one - confirmed with
   // the user as the intended behavior, not a bug to fix.
   function s2aChartTraces(zoneArr) {
     var zones = zoneArr.map(function (z) { return z.zone; });
@@ -227,7 +227,7 @@ window.Reports.s2a = async function s2a(wb) {
     };
   }
   // Live Plotly preview of the same styled chart (no baked image). Only the
-  // 'Auto Open Closed' sheet previews a chart — matching what the preview
+  // 'Auto Open Closed' sheet previews a chart - matching what the preview
   // always showed; the Overdue sheet's chart lives in the Excel file only.
   var chartConfigs = {};
   var oc = s2aChartTraces(zoneSummary);

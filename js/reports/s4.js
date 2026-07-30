@@ -6,31 +6,31 @@
 // Baseline'25 -> last-3-periods -> Target'26 matrix, and writes
 // "Risk_Output.xlsx" (sheets "Dashboard" + "History Used") and "History.xlsx".
 //
-// History now carries forward between runs — see window.S4History below.
+// History now carries forward between runs - see window.S4History below.
 
 // ── History store ───────────────────────────────────────────────────────────
 // The script treats History.xlsx as "the historical data source for future
 // executions" (spec steps 15/16/20): it reads the file back on the next run so
-// periods accumulate. This app has no filesystem to read from — output files
-// are download blobs — so the browser's own storage stands in for the script's
+// periods accumulate. This app has no filesystem to read from - output files
+// are download blobs - so the browser's own storage stands in for the script's
 // working directory.
 //
 // Everything here is best-effort by design. Opened from file://, localStorage
 // can throw on access (opaque origin, private browsing, storage disabled by
 // policy). Every call is guarded, and when storage is unavailable the report
-// behaves exactly as it did before this existed — seed fresh every run — and
+// behaves exactly as it did before this existed - seed fresh every run - and
 // says so in its execution summary rather than pretending it saved anything.
 window.S4History = (function () {
   'use strict';
   // Versioned: bump when a change makes rows written by a previous build
   // untrustworthy. Fixing how a period is DERIVED does not unsay a bad label
-  // that was already saved — a wrong month keeps being charted from storage
+  // that was already saved - a wrong month keeps being charted from storage
   // long after the code that produced it is gone, which is exactly how a "Dec
   // '26" and a "Jul '26" each outlived their fix. Nothing distinguishes a
   // poisoned row from a good one after the fact, so the whole generation is
   // retired rather than asking every user to find the Reset button.
-  //   v1 — clock-derived period ("Jul '26" beside May data)
-  //   v2 — max()-date period (one scheduled December date named the report)
+  //   v1 - clock-derived period ("Jul '26" beside May data)
+  //   v2 - max()-date period (one scheduled December date named the report)
   var KEY = 'prp.s4.history.v3';
   var STALE_KEYS = ['prp.s4.history.v1', 'prp.s4.history.v2'];
 
@@ -49,7 +49,7 @@ window.S4History = (function () {
     var s = store();
     if (!s) return null;
     try {
-      // Retired generations are dead weight, not fallbacks — drop them on sight
+      // Retired generations are dead weight, not fallbacks - drop them on sight
       // so a later key bump can never resurrect one.
       STALE_KEYS.forEach(function (k) { s.removeItem(k); });
       var raw = s.getItem(KEY);
@@ -96,7 +96,7 @@ window.Reports.s4 = async function s4(wb) {
   var TARGET_LABEL = "Target '26";
   var TARGET_PERCENT = 0.80;
   // A month must hold at least this share of the year's dated rows before it can
-  // name the reporting period — see getPeriodLabel. Mirrors PERIOD_MIN_SHARE in
+  // name the reporting period - see getPeriodLabel. Mirrors PERIOD_MIN_SHARE in
   // diagram4/automation.py; change both together.
   var PERIOD_MIN_SHARE = 0.05;
   var SEED_HISTORY_WHEN_MISSING = true;
@@ -106,7 +106,7 @@ window.Reports.s4 = async function s4(wb) {
   ];
   var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  // clean_column_name / normalize_stage — remove \r and \n, then strip. That is
+  // clean_column_name / normalize_stage - remove \r and \n, then strip. That is
   // all the script does, so that is all this does: a widened cleaner would make
   // this report count rows the reference output does not.
   function clean(v) {
@@ -115,7 +115,7 @@ window.Reports.s4 = async function s4(wb) {
     return String(v).replace(/[\r\n]/g, '').trim();
   }
 
-  // Name the sheet AND what the workbook actually contains — "not found" on its
+  // Name the sheet AND what the workbook actually contains - "not found" on its
   // own gives the user nothing to act on, and the script lists them too.
   if (wb && Array.isArray(wb.SheetNames) && wb.SheetNames.indexOf(SHEET_NAME) === -1) {
     throw new Error("Sheet '" + SHEET_NAME + "' not found. Available sheets: " + wb.SheetNames.join(', '));
@@ -123,7 +123,7 @@ window.Reports.s4 = async function s4(wb) {
   var sheet = E.readSheet(wb, SHEET_NAME);
   var cleanedHeaders = sheet.headers.map(clean);
 
-  // Two columns can carry the same header — an export that gained a replacement
+  // Two columns can carry the same header - an export that gained a replacement
   // "Stage" keeps the original beside it, usually empty. sheet_to_json dedupes
   // the row KEYS by occurrence (Stage, Stage_1), but re-keying by the cleaned
   // header collapsed them so only the FIRST was ever readable; a populated
@@ -152,7 +152,7 @@ window.Reports.s4 = async function s4(wb) {
   });
 
   // find_required_column: {clean(col).lower(): col} and an exact lookup. Not a
-  // fuzzy match — an earlier version matched on word tokens, so "Date Created
+  // fuzzy match - an earlier version matched on word tokens, so "Date Created
   // (UTC)" resolved where the script would have raised. Both date columns are
   // required, so an unresolved one stops the run instead of being worked around.
   var lowered = cleanedHeaders.map(function (h) { return h.toLowerCase(); });
@@ -176,7 +176,7 @@ window.Reports.s4 = async function s4(wb) {
   var riskCreated = rows.filter(function (r) { return E.excelYear(r[dateCreatedCol]) === YEAR; }).length;
   var targetValue = Math.round(totalRisk * TARGET_PERCENT);
 
-  // get_period_label — the reporting period is the LAST month in the file that
+  // get_period_label - the reporting period is the LAST month in the file that
   // carries real volume, and March maps to "Q1 '26". The clock is never
   // consulted, so the same workbook always produces the same label.
   //
@@ -185,7 +185,7 @@ window.Reports.s4 = async function s4(wb) {
   // whose data is May. A month holding at least PERIOD_MIN_SHARE of the year's
   // dated rows is a reporting month; anything after it is noise, and it is
   // named in the run summary rather than dropped quietly. The Python does the
-  // same — keep the two in step if either changes.
+  // same - keep the two in step if either changes.
   var monthTally = [], skippedMonths = [], chosenMonth = null, periodFloor = 0;
 
   function getPeriodLabel() {
@@ -230,7 +230,7 @@ window.Reports.s4 = async function s4(wb) {
     'Risk Created in 2026': riskCreated,
     'Target 80%': targetValue,
     'Closed %': totalRisk ? closedRisk / totalRisk : 0,
-    // os.path.basename(input_file) — the uploaded file's own name, threaded
+    // os.path.basename(input_file) - the uploaded file's own name, threaded
     // through by runReport; the placeholder only shows if it wasn't supplied.
     'Input File': (wb && wb.__fileName) || 'workbook.xlsx',
     'Processed On': processedOn,
@@ -268,7 +268,7 @@ window.Reports.s4 = async function s4(wb) {
   }
 
   // update_history (step 16): append only if this month isn't already present.
-  // Never overwrite — a re-run of the same month keeps the original figures.
+  // Never overwrite - a re-run of the same month keeps the original figures.
   var alreadyPresent = history.some(function (r) { return String(r.Month) === String(metrics.Month); });
   var historyUpdated = !alreadyPresent;
   if (historyUpdated) history = history.concat([metrics]);
@@ -288,11 +288,11 @@ window.Reports.s4 = async function s4(wb) {
   var sortedHistory = history.slice().sort(function (a, b) { return periodSortKey(a.Month) - periodSortKey(b.Month); });
   // This dashboard is "as on" the period THIS file describes, so a stored period
   // LATER than it cannot belong here. Left in, it takes one of the three chart
-  // columns and pushes a real period off the left edge — which is how a May
+  // columns and pushes a real period off the left edge - which is how a May
   // report kept showing Apr/May/Dec long after the December row that caused it
   // was fixed: the bad label was already saved, and fixing the derivation does
   // not unsay it. The row stays in history; it is simply not part of this
-  // report. Mirrored in diagram4/automation.py — change both together.
+  // report. Mirrored in diagram4/automation.py - change both together.
   var currentKey = periodSortKey(periodLabel);
   var laterPeriods = sortedHistory.filter(function (r) { return periodSortKey(r.Month) > currentKey; })
     .map(function (r) { return r.Month; });
@@ -301,7 +301,7 @@ window.Reports.s4 = async function s4(wb) {
   // Quarter roll-up (reference workflow steps 17-20): history keeps MONTHLY
   // rows, but a completed quarter displays as ONE column. A quarter is
   // complete when its ENDING month's row exists (Q2 <- Jun, Q3 <- Sep,
-  // Q4 <- Dec), and the quarter shows that ending month's numbers — a
+  // Q4 <- Dec), and the quarter shows that ending month's numbers - a
   // snapshot, not a sum, because these are cumulative as-on-date values.
   // Months of an incomplete quarter stay individual, so the display runs
   // "Q1, Q2, Jul, Aug" until September collapses it to "Q1, Q2, Q3". Q1
@@ -417,7 +417,7 @@ window.Reports.s4 = async function s4(wb) {
   //
   // Dashboard only. History's grid stays numeric because selectCharts('s4')
   // derives the preview chart from History.xlsx via chartableFromSheet, which
-  // picks its series by "is this column numeric" — stringifying Closed % there
+  // picks its series by "is this column numeric" - stringifying Closed % there
   // would silently drop a series from the chart.
   function renderPercents(grid, cells) {
     var out = grid.map(function (row) { return row.slice(); });
@@ -441,7 +441,7 @@ window.Reports.s4 = async function s4(wb) {
   // grid is 0-indexed, ExcelJS is 1-indexed.
   pctCells.forEach(function (rc) { wsDash.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
 
-  // ── Cell formatting — the xlsxwriter format objects, one for one ──
+  // ── Cell formatting - the xlsxwriter format objects, one for one ──
   // header_fmt / left_fmt gold, peach_fmt on the calculation labels, thin
   // borders throughout, body numbers right-aligned. Number formats are left
   // alone: PCT_FMT above already covers every percent cell.
@@ -457,7 +457,7 @@ window.Reports.s4 = async function s4(wb) {
     if (o.align) cell.alignment = o.align;
   }
 
-  // Matrix: gold header row, gold row labels down column A, bordered body —
+  // Matrix: gold header row, gold row labels down column A, bordered body -
   // applied to blank cells too, as the script does, so the grid stays unbroken.
   var nCols = tableHeaders.length;
   for (var hc = 1; hc <= nCols; hc++) fmt(1, hc, { fill: GOLD, bold: true, border: true, align: CENTER });
@@ -486,7 +486,7 @@ window.Reports.s4 = async function s4(wb) {
   });
 
   // set_column(0,0,28) / set_column(1,6,14). xlsxwriter stores a requested
-  // width plus its own padding, so these are the values that land on disk —
+  // width plus its own padding, so these are the values that land on disk -
   // a bare 28/14 here would render narrower than the script's output.
   wsDash.getColumn(1).width = 28.7109375;
   for (var wc = 2; wc <= 7; wc++) wsDash.getColumn(wc).width = 14.7109375;
@@ -508,7 +508,7 @@ window.Reports.s4 = async function s4(wb) {
         grouping: 'clustered', legend: false, title: 'Cumulative Risk Treatment Progress',
         chartBg: '000000', plotBg: '000000', axisColor: 'FFFFFF',
         // set_y_axis({visible: False, major_gridlines: {visible: False}}) and
-        // set_x_axis({label_position: "low"}) — the bars carry their own labels.
+        // set_x_axis({label_position: "low"}) - the bars carry their own labels.
         hideValAx: true, catTickLblPos: 'low',
         dataLabels: { position: 'ctr', color: 'FFFFFF' },
         categories: { ref: R(DASH_SHEET, 1, s4First, s4Last), cache: calcLabels },
@@ -526,7 +526,7 @@ window.Reports.s4 = async function s4(wb) {
   histPctCells.forEach(function (rc) { wsHistUsed.getCell(rc[0] + 1, rc[1] + 1).numFmt = PCT_FMT; });
 
   // Display History (workflow step 23): the rolled-up period list the chart
-  // and matrix actually used — quarters where complete, months elsewhere.
+  // and matrix actually used - quarters where complete, months elsewhere.
   var DISPLAY_SHEET = 'Display History';
   var displayGrid = [['Period', 'Open risk as on date', 'Closed Risk in 2026', 'Total Risk', 'Risk Created in 2026', 'Closed %']]
     .concat(displayHistory.map(function (d) {
@@ -559,7 +559,7 @@ window.Reports.s4 = async function s4(wb) {
   // straight through and the results view renders it in the "Script log"
   // panel, which until now always read "No console output."
   var storageNote = !storageOk
-    ? 'unavailable (private mode or file:// restrictions) — this run will not be remembered'
+    ? 'unavailable (private mode or file:// restrictions) - this run will not be remembered'
     : historySaved
       ? 'saved to browser storage · ' + history.length + ' period' + (history.length === 1 ? '' : 's') + ' held'
       : 'could not be saved (storage full or blocked)';
@@ -575,15 +575,15 @@ window.Reports.s4 = async function s4(wb) {
     'Created/updated: ' + OUTPUT_FILE,
     'Created/updated: ' + HISTORY_FILE,
     '',
-    // Everything below is browser-side context — it explains the label rather
+    // Everything below is browser-side context - it explains the label rather
     // than changing it. The tally matters most: it shows which month the period
     // came from and, when a later month was ignored, that the rows exist.
     'Duplicate columns: ' + (dupHeaders.length
       ? dupHeaders.join(', ') + '   (first non-blank value per row is used)' : 'none'),
-    'Reporting period: ' + MONTH_ABBR[chosenMonth - 1] + ' — the last month in ' +
+    'Reporting period: ' + MONTH_ABBR[chosenMonth - 1] + ' - the last month in ' +
       dateCreatedCol + ' / ' + dateClosedCol + ' holding at least ' + periodFloor + ' rows',
     'Dates by month in file: ' + monthTally.join(', ') +
-      (skippedMonths.length ? '   — ignored as noise: ' + skippedMonths.join(', ') : ''),
+      (skippedMonths.length ? '   - ignored as noise: ' + skippedMonths.join(', ') : ''),
     'Target arithmetic: ' + Math.round(TARGET_PERCENT * 100) + '% of Total Risk (' + openRisk +
       ' open + ' + closedRisk + ' closed = ' + totalRisk + ') = ' + targetValue,
     'History loaded from: ' + historySource,
@@ -593,10 +593,10 @@ window.Reports.s4 = async function s4(wb) {
     'Periods in chart: ' + periodLabels.join(', ') + '  (last 3 of ' + displayHistory.length + ' display periods)',
   ];
   if (laterPeriods.length) {
-    // The "  ^ " prefix is what makes the shell open the Script log by itself —
+    // The "  ^ " prefix is what makes the shell open the Script log by itself -
     // a period silently dropped from the chart must not go unmentioned.
     lines.push('  ^ Held but not charted: ' + laterPeriods.join(', ') +
-      '   (later than ' + periodLabel + ', this file\'s period — use Reset to clear them)');
+      '   (later than ' + periodLabel + ', this file\'s period - use Reset to clear them)');
   }
   var stdout = lines.join('\n');
 

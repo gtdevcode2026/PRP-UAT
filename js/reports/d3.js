@@ -1,5 +1,5 @@
 // Port of "daigram 3 automation/automation.py" (id: d3; the embedded/shipped
-// version uses relative paths — "PRP Sample Jun (2).xlsx" / "output.xlsx" —
+// version uses relative paths - "PRP Sample Jun (2).xlsx" / "output.xlsx" -
 // the standalone .py on disk has stale absolute paths from the original
 // author's machine, not used here).
 // Reads "OneTrust Assessment", auto-detects Stage/Organization/Working1/
@@ -30,7 +30,7 @@ window.Reports.d3 = async function d3(wb) {
   var w1Col = findCol('Working1');
   var w2Col = findCol('Working2');
   // stage_col/classify_stage only feed "Final Status", which is used purely
-  // as the pivot's *value* column for counting — its actual text (Completed/
+  // as the pivot's *value* column for counting - its actual text (Completed/
   // Open) never appears in the output, so it needn't be computed here.
 
   var filtered = rows.filter(function (r) {
@@ -45,8 +45,8 @@ window.Reports.d3 = async function d3(wb) {
     { margins: false }
   );
 
-  // The script charts a FIXED window of columns B:C — "ONLY Pending +
-  // Completed in 2026, exclude Grand Total column" — and colours series[0] red
+  // The script charts a FIXED window of columns B:C - "ONLY Pending +
+  // Completed in 2026, exclude Grand Total column" - and colours series[0] red
   // / series[1] orange, so it presumes both Working1 columns are present in
   // that order. pivot_table only emits the values that actually occur, so when
   // the filter yields just one of them (all-Pending data, say) that fixed
@@ -62,7 +62,7 @@ window.Reports.d3 = async function d3(wb) {
   });
 
   // Manual two-step Grand Total (matches `pivot["Grand Total"]=sum(axis=1)`
-  // then `pivot.loc["Grand Total"]=sum()` — column first, then row over the
+  // then `pivot.loc["Grand Total"]=sum()` - column first, then row over the
   // now-wider matrix). The sheet keeps all three columns: Completed, Pending
   // and Grand Total; only the CHART leaves the total out.
   var headers = W1_COLUMNS.concat(['Grand Total']);
@@ -84,7 +84,7 @@ window.Reports.d3 = async function d3(wb) {
 
   // Embedded chart reproduces the original openpyxl native stacked BarChart
   // (white background, "Completed in 2026"=red / "Pending"=orange, axis
-  // titles) — built from the pivot BEFORE the Grand Total column/row were
+  // titles) - built from the pivot BEFORE the Grand Total column/row were
   // appended, matching the original's Reference(min_col=2, max_col=3,
   // max_row=ws.max_row-1) which excludes both. Deviation from the Python
   // chart: white in-bar value labels (zeros hidden), same as d2/s3d.

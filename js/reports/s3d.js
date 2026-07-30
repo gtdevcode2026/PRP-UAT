@@ -2,9 +2,9 @@
 // Reads "OneTrust - Risk Export", finds Organization/ID/Stage/Aging|Ageing
 // columns by case-insensitive alias lookup, extracts a numeric day-count
 // from the Aging column via regex (defaulting to 0 when no digits are
-// found — this makes every row "Open" on the shipped sample data, since its
+// found - this makes every row "Open" on the shipped sample data, since its
 // Aging column holds text, not numbers; reproduced deliberately, not
-// "fixed" — confirmed with the user), classifies Open/Overdue (>90 days),
+// "fixed" - confirmed with the user), classifies Open/Overdue (>90 days),
 // merges BEES + BEES|FINTECH + Growth variants into a single org "GRO"
 // before any grouping, pivots Organization x Risk_Status, maps zones, and
 // builds a separate Zone Summary (Total/Open counts by org name). Writes
@@ -160,7 +160,7 @@ window.Reports.s3d = async function s3d(wb) {
       margin: { t: 50, r: 20, b: 70, l: 50 },
     };
   }
-  // Live Plotly previews of the same styled charts (no baked images) —
+  // Live Plotly previews of the same styled charts (no baked images) -
   // preview and the native Excel charts always match.
   var chartConfigs = {};
   var oovDataRows = openVsOverdueGrid.slice(1);

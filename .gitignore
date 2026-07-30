@@ -14,6 +14,6 @@ Thumbs.db
 .playwright-mcp/
 .claude/
 
-# NOTE: vendor/ and js/ are intentionally NOT ignored — the deployed
+# NOTE: vendor/ and js/ are intentionally NOT ignored - the deployed
 # index.html needs them (vendored libraries + report engine). Do not add
 # them here.

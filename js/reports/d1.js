@@ -24,7 +24,7 @@ window.Reports.d1 = async function d1(wb) {
     return year === 2026 && cat === 'TECHNOLOGY';
   });
 
-  // groupby("supplier_zone")["id"].count() — pandas .count() counts non-null values.
+  // groupby("supplier_zone")["id"].count() - pandas .count() counts non-null values.
   var groups = E.groupBy(filtered, function (r) { return r.supplier_zone; });
   var addedByZone = {};
   groups.forEach(function (zoneRows, zone) {
@@ -51,7 +51,7 @@ window.Reports.d1 = async function d1(wb) {
   // figure, blue/orange stacked bars, white in-bar value labels, bold white
   // title with the running total). The SAME config drives the live Plotly
   // "Chart preview" (via chartConfigs below) and mirrors the native Excel
-  // chart injected into the workbook — preview and file always match.
+  // chart injected into the workbook - preview and file always match.
   var zones = chartRows.map(function (r) { return r[0]; });
   var tier1Vals = chartRows.map(function (r) { return r[1]; });
   var addedVals = chartRows.map(function (r) { return r[2]; });

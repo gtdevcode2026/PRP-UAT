@@ -1,4 +1,4 @@
-# Native Editable Excel Charts — Implementation Plan
+# Native Editable Excel Charts - Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -80,7 +80,7 @@ git commit -m "feat: vendor fflate for native-chart zip injection"
 
 ---
 
-## Task 2: `NativeChart` — OOXML chart/drawing generator
+## Task 2: `NativeChart` - OOXML chart/drawing generator
 
 **Files:**
 - Create: `js/native-chart.js`
@@ -157,12 +157,12 @@ console.log('NativeChart: all assertions passed');
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `node test/native-chart.test.js`
-Expected: FAIL — `Cannot find module '../js/native-chart.js'`.
+Expected: FAIL - `Cannot find module '../js/native-chart.js'`.
 
 - [ ] **Step 3: Implement `js/native-chart.js`**
 
 ```js
-// Native OOXML column-chart generator. Pure string builders — no I/O, no zip.
+// Native OOXML column-chart generator. Pure string builders - no I/O, no zip.
 // Dual-export: browser (window.NativeChart) + Node (module.exports) for tests.
 (function (root) {
   'use strict';
@@ -302,7 +302,7 @@ git commit -m "feat: native OOXML column-chart XML generator + tests"
 
 ---
 
-## Task 3: `NativeChartInject` — zip patcher
+## Task 3: `NativeChartInject` - zip patcher
 
 **Files:**
 - Create: `js/native-chart-inject.js`
@@ -362,7 +362,7 @@ const NCI = require('../js/native-chart-inject.js');
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node test/native-chart-inject.test.js`
-Expected: FAIL — `Cannot find module '../js/native-chart-inject.js'`.
+Expected: FAIL - `Cannot find module '../js/native-chart-inject.js'`.
 
 - [ ] **Step 3: Implement `js/native-chart-inject.js`**
 
@@ -500,7 +500,7 @@ Expected: FAIL — `Cannot find module '../js/native-chart-inject.js'`.
 })(typeof window !== 'undefined' ? window : globalThis);
 ```
 
-> Note: `drawingXml` in Task 2 returns a full standalone document; when a sheet has one chart the injector could use it directly, but to support multiple charts per sheet it strips the wrapper and re-wraps all anchors together (above). Keep `drawingXml` returning the standalone form — the strip/re-wrap handles both cases.
+> Note: `drawingXml` in Task 2 returns a full standalone document; when a sheet has one chart the injector could use it directly, but to support multiple charts per sheet it strips the wrapper and re-wraps all anchors together (above). Keep `drawingXml` returning the standalone form - the strip/re-wrap handles both cases.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -535,7 +535,7 @@ git commit -m "feat: inject native charts into ExcelJS xlsx via fflate + tests"
 
 ---
 
-## Task 4: Wire s3d (`Risk_Output.xlsx`) — reference report
+## Task 4: Wire s3d (`Risk_Output.xlsx`) - reference report
 
 **Files:**
 - Modify: `js/reports/s3d.js` (chart build + workbook write, ~lines 160-200)
@@ -546,7 +546,7 @@ git commit -m "feat: inject native charts into ExcelJS xlsx via fflate + tests"
 
 - [ ] **Step 1: Read the current s3d chart + write code**
 
-Run: `sed -n '150,210p' js/reports/s3d.js` — identify (a) the two `renderStyledPng`/`addImage` chart embeds and their sheets/anchors, (b) the grids that hold each chart's categories/values so refs can be computed, (c) the `writeBuffer()` return.
+Run: `sed -n '150,210p' js/reports/s3d.js` - identify (a) the two `renderStyledPng`/`addImage` chart embeds and their sheets/anchors, (b) the grids that hold each chart's categories/values so refs can be computed, (c) the `writeBuffer()` return.
 
 - [ ] **Step 2: Build `chartDef`s from the existing traces**
 
@@ -570,7 +570,7 @@ var oovDef = {
   ],
 };
 ```
-Build `zsDef` the same way for "Zone Summary" (Total Risks→`156082`, Open Risks→`F26C23`). **If the report's output sheet does not already contain these columns as a clean block, add a small data block to that sheet (the report already builds the grid — extend it) and point the refs there.**
+Build `zsDef` the same way for "Zone Summary" (Total Risks→`156082`, Open Risks→`F26C23`). **If the report's output sheet does not already contain these columns as a clean block, add a small data block to that sheet (the report already builds the grid - extend it) and point the refs there.**
 
 - [ ] **Step 3: Replace the PNG embed with native injection**
 
@@ -588,11 +588,11 @@ try {
   }
 } catch (e) { console.error('native chart inject failed, keeping image fallback:', e); }
 ```
-(Adjust anchors to match where the PNGs sat. If keeping a fallback image, leave `addImage` in and skip it only when injection succeeds — simplest is: remove image, rely on native chart; the `catch` logs but the file still has data.)
+(Adjust anchors to match where the PNGs sat. If keeping a fallback image, leave `addImage` in and skip it only when injection succeeds - simplest is: remove image, rely on native chart; the `catch` logs but the file still has data.)
 
 - [ ] **Step 4: Verify in the real app**
 
-Run the app: open `index.html` — **but first** note this task edits only `js/reports/s3d.js`; `index.html` is mirrored in Task 8. To verify now without the full mirror, use a Node harness that requires the modular report is not feasible (reports need Plotly/DOM). Instead verify by a temporary browser run after a partial mirror, OR defer full verification to Task 8. **Recommended:** do a focused manual check now by temporarily inlining just s3d's change into `index.html`, running s3d in the browser, downloading `Risk_Output.xlsx`, and opening in Excel. Confirm: two native charts, correct colors/legends, editable.
+Run the app: open `index.html` - **but first** note this task edits only `js/reports/s3d.js`; `index.html` is mirrored in Task 8. To verify now without the full mirror, use a Node harness that requires the modular report is not feasible (reports need Plotly/DOM). Instead verify by a temporary browser run after a partial mirror, OR defer full verification to Task 8. **Recommended:** do a focused manual check now by temporarily inlining just s3d's change into `index.html`, running s3d in the browser, downloading `Risk_Output.xlsx`, and opening in Excel. Confirm: two native charts, correct colors/legends, editable.
 
 - [ ] **Step 5: Commit**
 
@@ -611,15 +611,15 @@ git commit -m "feat(s3d): native editable charts in Risk_Output.xlsx"
 **Interfaces:**
 - Same pattern as Task 4; one `chartDef` per embedded chart.
 
-- [ ] **Step 1: d1 — Final Table (`PRP_Output.xlsx`)**
+- [ ] **Step 1: d1 - Final Table (`PRP_Output.xlsx`)**
 
 Two series: Tier-1 Supplier→`1f77b4`, Supplier Added by Zone→`ff7f0e`; clustered; legend; inside data labels (`dataLabels: { position: 'inEnd', color: 'FFFFFF' }`). Categories = `zones`, values = `tier1Vals` / `addedVals`. Build refs against the Final Table sheet's columns; add a data block if not already present. Remove `addImage`; inject after `writeBuffer()`.
 
-- [ ] **Step 2: d2 — Dashboard (`output file D2.xlsx`)**
+- [ ] **Step 2: d2 - Dashboard (`output file D2.xlsx`)**
 
 Only the "org" chart is embedded today. Series Open→`00AEEF`, Closed→`D4AF37`; clustered; legend; data labels inside white. Categories = `orgLabels`, values = `openVals`/`closedVals`. Inject on the Dashboard sheet at the org chart's anchor. Leave the kpi chart alone (not embedded).
 
-- [ ] **Step 3: s2a — Auto Open Closed + Overdue sheet (`OneTrust_Report.xlsx`)**
+- [ ] **Step 3: s2a - Auto Open Closed + Overdue sheet (`OneTrust_Report.xlsx`)**
 
 Two charts, each: Closed→`2F75B5`, Open→`ED7D31`; clustered; legend. Categories = `zones`, values = `closedVals`/`openVals` (and the overdue equivalents). Two placements on their respective sheets.
 
@@ -641,11 +641,11 @@ git commit -m "feat(d1,d2,s2a): native editable charts in outputs"
 **Files:**
 - Modify: `js/reports/s1c.js`, `js/reports/d3.js`
 
-- [ ] **Step 1: s1c — Summary + Active by Zone (`PRP_Final_Output3.xlsx`)**
+- [ ] **Step 1: s1c - Summary + Active by Zone (`PRP_Final_Output3.xlsx`)**
 
 Each chart single-series, `legend: false`, color `4472C4`, `dataLabels: { position: 'outEnd', color: '000000' }`, `title` = 'Assessment Status Overview' / 'Active by Zone'. One series with `name: { lit: 'Count' }`; categories/values from `statusRows` / `zoneRows`. Two placements.
 
-- [ ] **Step 2: d3 — Summary (`output.xlsx`)**
+- [ ] **Step 2: d3 - Summary (`output.xlsx`)**
 
 `grouping: 'stacked'`, legend true, dynamic series from `pivot.headers` with colors `{'Completed in 2026':'FF0000','Pending':'FFC000'}` (fallback `4472C4`). Title 'Assessments Completed vs Open'. Only inject when `pivot.indexVals.length` (matches current guard).
 
@@ -694,7 +694,7 @@ git commit -m "feat(s4): native per-point progress chart in Risk_Output.xlsx"
 **Files:**
 - Modify: `index.html` (inline `NativeChart` + `NativeChartInject` before the reports; mirror each report change; fflate already added in Task 1)
 
-**Interfaces:** none new — this makes the runtime match the modular source.
+**Interfaces:** none new - this makes the runtime match the modular source.
 
 - [ ] **Step 1: Inline the two new modules**
 
@@ -740,6 +740,6 @@ git commit -m "feat: mirror native-chart engine + report wiring into index.html 
 ## Self-review notes
 
 - **Spec coverage:** §5.1 NativeChart → Task 2; §5.2 injectNativeCharts → Task 3; §5.3 data-linking → Tasks 4-7 (refs + caches); §5.4 per-report → Tasks 4-7; §5.5 vendor+fallback → Task 1 + `try/catch` in each report; §3 dual-maintenance → Task 8; §8 testing → Node tests (Tasks 2-3) + manual Excel/LibreOffice (Tasks 3-8); §9 rollout order preserved (s3d first).
-- **Placeholders:** none — every code step has real code; per-report chartDefs give concrete colors/series (anchors/refs are computed from each report's real grid, flagged to adjust to actual column positions during Step 1 reads).
+- **Placeholders:** none - every code step has real code; per-report chartDefs give concrete colors/series (anchors/refs are computed from each report's real grid, flagged to adjust to actual column positions during Step 1 reads).
 - **Type consistency:** `chartXml(def)` / `drawingXml(anchor, relId)` / `inject(bytes, placements)` signatures are used consistently across Tasks 2, 3, and 4-8; `def`/`anchor`/`placements` shapes match the Task 2/3 interface blocks.
 - **Known risk to resolve during execution:** exact worksheet-part filenames (`sheetN.xml`) are not guaranteed to match sheet order; the injector resolves them via `workbook.xml` + rels (not by guessing), so multi-sheet outputs (s2a, s1c, s3d, s4) map correctly.

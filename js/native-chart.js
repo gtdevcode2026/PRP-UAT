@@ -1,4 +1,4 @@
-// Native OOXML column-chart generator. Pure string builders — no I/O, no zip.
+// Native OOXML column-chart generator. Pure string builders - no I/O, no zip.
 // Turns a report's chart data (categories, series names/colors/values) into the
 // xl/charts/chartN.xml + xl/drawings/drawingN.xml parts that Excel opens as a
 // real, editable chart. Replaces the baked-PNG (renderStyledPng) embed.
@@ -100,7 +100,7 @@
     var catOrient = def.catReversed ? 'maxMin' : 'minMax';
     var valNumFmt = def.valNumFmt ? '<c:numFmt formatCode="' + def.valNumFmt + '" sourceLinked="0"/>' : '';
     // hideValAx mirrors xlsxwriter's set_y_axis({visible: False, major_gridlines:
-    // {visible: False}}) — used where the bars carry their own data labels and a
+    // {visible: False}}) - used where the bars carry their own data labels and a
     // second scale would only add noise. Default keeps the axis and gridlines.
     var valDelete = def.hideValAx ? '1' : '0';
     var valGridlines = def.hideValAx ? '' : '<c:majorGridlines/>';

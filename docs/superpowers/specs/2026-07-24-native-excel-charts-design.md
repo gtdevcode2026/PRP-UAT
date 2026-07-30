@@ -1,7 +1,7 @@
 # Native, editable Excel charts in report outputs
 
 **Date:** 2026-07-24
-**Status:** Approved design — ready for implementation plan
+**Status:** Approved design - ready for implementation plan
 **Owner:** PRP Automation Dashboard
 
 ---
@@ -18,14 +18,14 @@ into the workbook via ExcelJS `addImage`. The PNG is not editable: the user
 cannot change bar colors or legend/series labels in the delivered file.
 
 **Goal:** every chart in the 7 reports' output files must be a **native,
-editable Excel chart** — a real chart object, pre-filled with the same colors and
+editable Excel chart** - a real chart object, pre-filled with the same colors and
 legend labels used today, that the user recolors and relabels **in Excel using
 Excel's own chart tools**. There is **no in-app editor**; the editing capability
 is Excel itself.
 
 This restores the original design intent: the code comments state the outputs
 were meant to "reproduce the original openpyxl native BarChart" and "original
-xlsxwriter native column chart" — the PNG-baking was only a workaround for
+xlsxwriter native column chart" - the PNG-baking was only a workaround for
 ExcelJS's lack of chart support.
 
 ### Non-goals (YAGNI)
@@ -90,7 +90,7 @@ data calculation is introduced.
 
 Three units with clear boundaries:
 
-### 5.1 `NativeChart` — OOXML chart-part generator (new module)
+### 5.1 `NativeChart` - OOXML chart-part generator (new module)
 **Purpose:** turn a `chartDef` into OOXML strings. Pure, no I/O, no zip.
 
 **Interface**
@@ -121,7 +121,7 @@ NativeChart.buildDrawingXml(anchor, chartRelId) -> string  // xl/drawings/drawin
 **Depends on:** nothing. **Testable** in isolation by asserting the XML contains
 the expected `c:barChart`, `c:ser`, `a:solidFill`, `c:dPt`, `c:legend` nodes.
 
-### 5.2 `injectNativeCharts` — zip patcher (new, in `bridge.js`)
+### 5.2 `injectNativeCharts` - zip patcher (new, in `bridge.js`)
 **Purpose:** given the ExcelJS output buffer and a list of chart placements,
 return a new buffer whose sheets carry native charts.
 

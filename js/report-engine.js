@@ -30,13 +30,13 @@ window.ReportEngine = (function () {
   // Extracts calendar components from an Excel date cell WITHOUT going
   // through a JS Date object's local-timezone getters. Deliberately avoids
   // XLSX's cellDates:true (which builds dates via `new Date(1899,11,30,...)`
-  // — a local-constructor call whose UTC offset for 1899 can differ from a
+  // - a local-constructor call whose UTC offset for 1899 can differ from a
   // modern date's offset in timezones that changed their official UTC
   // offset historically, e.g. India shifted from UTC+5:21 to UTC+5:30 in
   // 1906. That mismatch silently mis-derives the year for some rows,
   // depending entirely on the machine's timezone). Reading the raw numeric
   // serial and decoding it with XLSX.SSF.parse_date_code sidesteps the
-  // whole class of bug — this app must behave identically regardless of
+  // whole class of bug - this app must behave identically regardless of
   // what timezone the client machine is set to.
   function excelDateInfo(v) {
     if (isBlank(v)) return null;
@@ -50,7 +50,7 @@ window.ReportEngine = (function () {
     }
     // Text dates. pandas' to_datetime accepts far more shapes than
     // `new Date()` does, and a report that silently drops every row it cannot
-    // parse reports a confident wrong number rather than an error — a
+    // parse reports a confident wrong number rather than an error - a
     // "Date created" column exported as 14/12/2026 made every 2026 filter in
     // this app match nothing. Each shape below is decomposed with a regex and
     // never round-tripped through a local-time Date, for the same reason the
@@ -86,8 +86,8 @@ window.ReportEngine = (function () {
     }
 
     // Anything exotic: let the engine try. Every string still reaching here
-    // was parsed as LOCAL time — only date-only ISO strings are treated as
-    // UTC, and those are handled above — so read the local components. The
+    // was parsed as LOCAL time - only date-only ISO strings are treated as
+    // UTC, and those are handled above - so read the local components. The
     // previous code read the UTC ones, which shifted every text date back a
     // day anywhere east of Greenwich (12/14/2026 came out as the 13th, and
     // 01/01/2026 came out in 2025 and was dropped by a year filter).
@@ -130,9 +130,9 @@ window.ReportEngine = (function () {
     return sawNumber;
   }
 
-  // grid: 2D array, row 0 = headers, remaining rows = data — mirrors
+  // grid: 2D array, row 0 = headers, remaining rows = data - mirrors
   // pd.read_excel(path, header=0) turning row 0 into df.columns.
-  // A real worksheet is rectangular — its column count is the widest row
+  // A real worksheet is rectangular - its column count is the widest row
   // written anywhere in the sheet, not however many cells happen to be
   // non-blank in row 0. Hand-built grids (setCell-style, sparse title/rule
   // rows above a real table) are naturally ragged arrays; pad every row to
@@ -226,7 +226,7 @@ window.ReportEngine = (function () {
   }
 
   // --- generic chart extraction (mirrors _chartable + _chart_json) ---
-  // Exact match only — s4's "Total Risk" is a real series, not a totals line.
+  // Exact match only - s4's "Total Risk" is a real series, not a totals line.
   function isTotalLabel(v) {
     var s = isBlank(v) ? '' : String(v).trim().toLowerCase();
     return s === 'grand total' || s === 'total';
@@ -241,7 +241,7 @@ window.ReportEngine = (function () {
     if (!numericIdx.length || !labelIdx.length) return null;
     // A "Grand Total" COLUMN is the sum of the other series, so charting it adds
     // a redundant bar that dwarfs its own parts (d3's Summary). Drop it, same as
-    // the totals ROW below — unless it is the only numeric column, leaving
+    // the totals ROW below - unless it is the only numeric column, leaving
     // nothing to plot. The table keeps the column; this only affects the chart.
     var nonTotalIdx = numericIdx.filter(function (i) { return !isTotalLabel(headers[i]); });
     if (nonTotalIdx.length) numericIdx = nonTotalIdx;
@@ -280,7 +280,7 @@ window.ReportEngine = (function () {
     var labels = [], values = [];
     // Read only the contiguous KPI table, stopping at the blank row that ends
     // it. This used to scan to the bottom of the sheet, so any later block with
-    // a label and a number became an extra bar — a "Rows matching 36" row below
+    // a label and a number became an extra bar - a "Rows matching 36" row below
     // the table charted as 3600%. The KPI chart is a fixed four-metric panel;
     // it has no business reading rows the table does not own.
     for (var r = kpiRowIdx + 1; r < grid.length; r++) {
@@ -289,7 +289,7 @@ window.ReportEngine = (function () {
       if (isBlank(metric) || String(metric).trim() === '') break;
       var val = row[valueCol];
       // Genuine numeric cells only: parseFloat('2026 x36') would yield 2026.
-      // Exception: strict "NN%" strings — d2's KPI Value column renders its
+      // Exception: strict "NN%" strings - d2's KPI Value column renders its
       // fractions as percent text ("60%"), which must keep charting as 0.60.
       var num = typeof val === 'number' ? val
         : (typeof val === 'string' && /^-?\d+(\.\d+)?%$/.test(val.trim())) ? parseFloat(val) / 100 : NaN;
@@ -353,9 +353,9 @@ window.ReportEngine = (function () {
   }
 
   // Growth/BEES zone sanitizer, shared by every report that groups on an
-  // organization or zone column: GRO, Growth, GROWTH, BEES, BEES | FINTECH —
+  // organization or zone column: GRO, Growth, GROWTH, BEES, BEES | FINTECH -
   // in any casing, spacing, punctuation, or with invisible characters
-  // (zero-width space, NBSP) — all report as the single zone 'GRO'.
+  // (zero-width space, NBSP) - all report as the single zone 'GRO'.
   // Compared on letters only so visually-identical export variants can
   // never split the bucket. Every other value passes through unchanged.
   function sanitizeZone(v) {
@@ -368,7 +368,7 @@ window.ReportEngine = (function () {
   // (code-point order, matching Python's default string sort), missing
   // index/column combinations filled with 0. If margins: a margin COLUMN
   // (row sums) is appended first, then a margin ROW (column sums over the
-  // now-wider matrix, so the corner cell = total count) is appended second —
+  // now-wider matrix, so the corner cell = total count) is appended second -
   // matching pandas pivot_table(margins=True) / the manual two-step
   // Grand-Total-column-then-row pattern used by the non-margins scripts.
   //
@@ -436,7 +436,7 @@ window.ReportEngine = (function () {
   }
 
   // files: [{ name, sheets: [{ name, grid }] }] (pure data, pre-write).
-  // Returns the trimmed, skip-filtered sheet list in file/sheet order —
+  // Returns the trimmed, skip-filtered sheet list in file/sheet order -
   // mirrors run_all's `processed_sheets`. Shared by the preview payload
   // builder AND each report module's own chart-embedding step, so both
   // always agree on which sheets exist post-trim.
@@ -480,7 +480,7 @@ window.ReportEngine = (function () {
       var dashGrid = findRawGrid(files, 'Dashboard');
       special = dashGrid ? d2ChartFromGrid(dashGrid) : null;
     } else if (sid === 's4') {
-      // Chart the Dashboard's "Chart Label/Chart Value" helper block — the
+      // Chart the Dashboard's "Chart Label/Chart Value" helper block - the
       // same Baseline + display periods + Target series the embedded native
       // chart plots. Falls back to the rolled-up Display History sheet, then
       // to the full monthly history file.

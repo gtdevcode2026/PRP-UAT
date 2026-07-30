@@ -6,7 +6,7 @@
 // { ok, files: [{ name, bytes: ArrayBuffer, sheets: [{name, grid}] }] }.
 // buildPayload then derives the JSON preview (table + a SEPARATE, lighter
 // preview chart via ReportEngine.processSheets/selectCharts) from those same
-// in-memory grids — no write-then-reread round trip needed.
+// in-memory grids - no write-then-reread round trip needed.
 window.ReportBridge = (function () {
   'use strict';
   var E = window.ReportEngine;
@@ -29,7 +29,7 @@ window.ReportBridge = (function () {
   // hidden Plotly instance, for embedding into the downloaded workbook. Each
   // report module builds traces/layout that reproduce that report's original
   // matplotlib/openpyxl/xlsxwriter chart look (colors, dark/light background,
-  // data labels, legend position, etc.) — the downloaded file's chart should
+  // data labels, legend position, etc.) - the downloaded file's chart should
   // look like the original script's output, not the light in-page preview
   // theme (buildBar/buildHBar in index.html, used only for the JSON preview).
   function renderStyledPng(traces, layout, width, height) {
@@ -63,7 +63,7 @@ window.ReportBridge = (function () {
   function buildPayload(sid, result) {
     var processed = E.processSheets(sid, result.files);
     var charts = E.selectCharts(sid, processed, result.files);
-    // Styled Plotly configs from the report itself — the exact traces/layout
+    // Styled Plotly configs from the report itself - the exact traces/layout
     // of the chart embedded in the Excel output. The preview renders these
     // live; the generic auto-derived chart is only a fallback.
     var chartConfigs = result.chartConfigs || {};
@@ -97,10 +97,10 @@ window.ReportBridge = (function () {
   }
 
   // opts is passed straight through to the report (d2 reads
-  // opts.financeRespondents — the names typed in the Generate card).
+  // opts.financeRespondents - the names typed in the Generate card).
   async function runReport(entry, file, opts) {
     var buf = await file.arrayBuffer();
-    // No cellDates: true — date cells come back as raw Excel serials, and
+    // No cellDates: true - date cells come back as raw Excel serials, and
     // each report reads them via ReportEngine.excelDateInfo/excelYear
     // instead of JS Date getters. See excelDateInfo's comment for why.
     var wb = XLSX.read(buf, { type: 'array' });
