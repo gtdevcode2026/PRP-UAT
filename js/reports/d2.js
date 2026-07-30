@@ -6,7 +6,8 @@
 // "Europe" here, not "EUR"), pivots Org Display x Final Stage (count, no
 // margins), sorts to a fixed zone order, appends a Grand Total row, and
 // computes a KPI panel that follows TODAY's calendar: finished quarters
-// roll up into one averaged bar each, the running quarter shows its
+// are static single bars (Q1 fixed in code, later quarters lock for good
+// on their first run after quarter end), the running quarter shows its
 // elapsed months individually, Baseline/Target stay static bookends.
 // Writes "output file D2.xlsx" as a single hand-built "Dashboard" sheet
 // (filter area, then the pivot table, then the KPI table below it) - the
@@ -132,14 +133,33 @@ window.Reports.d2 = async function d2(wb, opts) {
   var nowQuarter = Math.floor((nowMonth - 1) / 3) + 1;
   var KPI = [["Baseline '25", 0.60, 'Static']];
   var kpiNotes = [];
-  for (var q = 1; q < nowQuarter; q++) { // finished quarters -> one averaged bar
+  // Finished quarters are STATIC. Q1 '26 is fixed in code; each later
+  // quarter locks on the FIRST run after it ends: the averaged rate is
+  // saved to this browser's localStorage and every following run reuses
+  // that saved value untouched, whatever workbook or filter is loaded.
+  // Clearing site data (or localStorage.removeItem('PRP_D2_KPI_Q2_26')
+  // in the console) re-arms the one-time computation for that quarter.
+  var STATIC_Q = { 1: 0.32 };
+  for (var q = 1; q < nowQuarter; q++) {
+    var lockKey = 'PRP_D2_KPI_Q' + q + '_26';
+    var locked = STATIC_Q.hasOwnProperty(q) ? STATIC_Q[q] : null;
+    if (locked === null) {
+      try { var sv = localStorage.getItem(lockKey); if (sv !== null && !isNaN(Number(sv))) locked = Number(sv); } catch (e) {}
+    }
+    if (locked !== null) {
+      KPI.push(['Q' + q + " '26", locked, 'Static']);
+      kpiNotes.push('Q' + q + ' locked at ' + Math.round(locked * 100) + '%');
+      continue;
+    }
     var have = [q * 3 - 2, q * 3 - 1, q * 3].filter(function (m) { return mStats[m]; });
     if (!have.length) continue;
     var avg = have.reduce(function (a, m) { return a + mStats[m].closed / mStats[m].total; }, 0) / have.length;
-    KPI.push(['Q' + q + " '26", Math.round(avg * 100) / 100, '']);
+    avg = Math.round(avg * 100) / 100;
+    try { localStorage.setItem(lockKey, String(avg)); } catch (e) {}
+    KPI.push(['Q' + q + " '26", avg, 'Static']);
     kpiNotes.push('Q' + q + ' = avg(' + have.map(function (m) {
       return MONTH_ABBR[m - 1] + ' ' + mStats[m].closed + '/' + mStats[m].total;
-    }).join(', ') + ')');
+    }).join(', ') + ') - now locked');
   }
   for (var m = nowQuarter * 3 - 2; m <= nowMonth; m++) { // running quarter -> month bars
     if (!mStats[m]) continue;
