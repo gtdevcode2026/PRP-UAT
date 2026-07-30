@@ -60,14 +60,14 @@ window.Reports.d1 = async function d1(wb) {
       x: zones, y: tier1Vals, type: 'bar', name: 'Tier-1 Supplier',
       marker: { color: '#1f77b4' },
       text: tier1Vals.map(String), textposition: 'inside', insidetextanchor: 'middle', textangle: 0,
-      textfont: { color: '#ffffff', size: 10 },
+      constraintext: 'none', textfont: { color: '#ffffff', size: 14 },
     },
     {
       x: zones, y: addedVals, type: 'bar', name: 'Supplier Added by Zone',
       marker: { color: '#ff7f0e' },
       text: addedVals.map(function (v) { return v > 0 ? String(v) : ''; }),
       textposition: 'inside', insidetextanchor: 'middle', textangle: 0,
-      textfont: { color: '#ffffff', size: 10 },
+      constraintext: 'none', textfont: { color: '#ffffff', size: 14 },
     },
   ];
   var d1Layout = {
