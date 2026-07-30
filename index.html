@@ -922,7 +922,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp - bump on every release. No longer shown in the header (badges
 // removed by request); check it via PRP_BUILD in the browser console.
-window.PRP_BUILD = '2026-07-30.11';
+window.PRP_BUILD = '2026-07-30.12';
 
 // ── Inlined: report-engine.js ─────────────────────────────────────────────
 window.Reports = window.Reports || {};
@@ -2326,7 +2326,9 @@ window.Reports.d1 = async function d1(wb) {
 // itself when unmapped - unlike s2a/s3d's zone_map, "Europe" stays
 // "Europe" here, not "EUR"), pivots Org Display x Final Stage (count, no
 // margins), sorts to a fixed zone order, appends a Grand Total row, and
-// computes a small KPI panel (3 static values + 1 computed Q2 rate).
+// computes a KPI panel that follows TODAY's calendar: finished quarters
+// roll up into one averaged bar each, the running quarter shows its
+// elapsed months individually, Baseline/Target stay static bookends.
 // Writes "output file D2.xlsx" as a single hand-built "Dashboard" sheet
 // (filter area, then the pivot table, then the KPI table below it) - the
 // exact row offsets matter because the existing preview pipeline re-treats
@@ -2431,13 +2433,41 @@ window.Reports.d2 = async function d2(wb, opts) {
     : financeNames.length
       ? 'Finance filter: names were given but no Respondents column was found - fell back to Tags == "cyber" (' + recordTotal + ' rows).'
       : 'Finance filter: Tags column (Tags == "cyber") - ' + recordTotal + ' rows.';
-  var q2_26 = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
-  var KPI = [
-    ["Baseline '25", 0.60, 'Static'],
-    ["Q1 '26", 0.32, 'Static'],
-    ["Q2 '26", q2_26, ''],
-    ["Target '26", 0.65, 'Static'],
-  ];
+  // KPI roll-up driven by TODAY's date, not by the data. Every month's rate
+  // is that month's Closed / Total (Date created). Quarters that have already
+  // ended show as ONE bar = the average of their months' rates (Q1 = avg of
+  // Jan/Feb/Mar); the quarter we are in shows each elapsed month as its own
+  // bar. So Feb renders Jan+Feb; May renders Q1, Apr, May; July renders
+  // Q1, Q2, Jul. Months/quarters with no rows are skipped rather than drawn
+  // as misleading 0% bars. Baseline and Target stay as static bookends.
+  var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var mStats = {}; // month 1-12 -> { closed, total }
+  filtered.forEach(function (r) {
+    var d = E.excelDateInfo(r['Date created']);
+    if (!d) return;
+    var s = mStats[d.month] || (mStats[d.month] = { closed: 0, total: 0 });
+    s.total++;
+    if (r['Final Stage'] === 'Closed') s.closed++;
+  });
+  var nowMonth = new Date().getMonth() + 1;
+  var nowQuarter = Math.floor((nowMonth - 1) / 3) + 1;
+  var KPI = [["Baseline '25", 0.60, 'Static']];
+  var kpiNotes = [];
+  for (var q = 1; q < nowQuarter; q++) { // finished quarters -> one averaged bar
+    var have = [q * 3 - 2, q * 3 - 1, q * 3].filter(function (m) { return mStats[m]; });
+    if (!have.length) continue;
+    var avg = have.reduce(function (a, m) { return a + mStats[m].closed / mStats[m].total; }, 0) / have.length;
+    KPI.push(['Q' + q + " '26", Math.round(avg * 100) / 100, '']);
+    kpiNotes.push('Q' + q + ' = avg(' + have.map(function (m) {
+      return MONTH_ABBR[m - 1] + ' ' + mStats[m].closed + '/' + mStats[m].total;
+    }).join(', ') + ')');
+  }
+  for (var m = nowQuarter * 3 - 2; m <= nowMonth; m++) { // running quarter -> month bars
+    if (!mStats[m]) continue;
+    KPI.push([MONTH_ABBR[m - 1] + " '26", Math.round((mStats[m].closed / mStats[m].total) * 100) / 100, '']);
+    kpiNotes.push(MONTH_ABBR[m - 1] + ' = ' + mStats[m].closed + '/' + mStats[m].total);
+  }
+  KPI.push(["Target '26", 0.65, 'Static']);
 
   function setCell(grid, row1, col1, value) {
     var r = row1 - 1, c = col1 - 1;
@@ -2470,8 +2500,9 @@ window.Reports.d2 = async function d2(wb, opts) {
     setCell(grid, rowNum, 3, k[2]);
   });
   var noteRow = kpiStartRow + KPI.length + 2;
-  setCell(grid, noteRow, 1, 'Q2 formula');
-  setCell(grid, noteRow, 2, 'Closed / Grand Total = ' + closedTotal + ' / ' + recordTotal);
+  setCell(grid, noteRow, 1, 'KPI formula');
+  setCell(grid, noteRow, 2, 'Closed / Total per month; finished quarters average their months: ' +
+    (kpiNotes.length ? kpiNotes.join(', ') : 'no month data yet'));
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
 
