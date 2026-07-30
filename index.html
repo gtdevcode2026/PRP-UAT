@@ -922,7 +922,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp - bump on every release. No longer shown in the header (badges
 // removed by request); check it via PRP_BUILD in the browser console.
-window.PRP_BUILD = '2026-07-30.7';
+window.PRP_BUILD = '2026-07-30.8';
 
 // ── Inlined: report-engine.js ─────────────────────────────────────────────
 window.Reports = window.Reports || {};
@@ -2326,7 +2326,8 @@ window.Reports.d1 = async function d1(wb) {
 // itself when unmapped - unlike s2a/s3d's zone_map, "Europe" stays
 // "Europe" here, not "EUR"), pivots Org Display x Final Stage (count, no
 // margins), sorts to a fixed zone order, appends a Grand Total row, and
-// computes a small KPI panel (3 static values + 1 computed Q2 rate).
+// computes a small KPI panel (3 static values + 1 computed current-quarter
+// rate, labeled from today's date per D2.py's current_quarter_label).
 // Writes "output file D2.xlsx" as a single hand-built "Dashboard" sheet
 // (filter area, then the pivot table, then the KPI table below it) - the
 // exact row offsets matter because the existing preview pipeline re-treats
@@ -2431,11 +2432,15 @@ window.Reports.d2 = async function d2(wb, opts) {
     : financeNames.length
       ? 'Finance filter: names were given but no Respondents column was found - fell back to Tags == "cyber" (' + recordTotal + ' rows).'
       : 'Finance filter: Tags column (Tags == "cyber") - ' + recordTotal + ' rows.';
-  var q2_26 = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
+  // current_quarter_label (D2.py): the computed KPI row carries the CURRENT
+  // quarter - Jan-Mar Q1, Apr-Jun Q2, Jul-Sep Q3, Oct-Dec Q4 (year fixed at
+  // '26) - so the label advances by itself every three months.
+  var currentQLabel = 'Q' + (Math.floor(new Date().getMonth() / 3) + 1) + " '26";
+  var currentQ = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
   var KPI = [
     ["Baseline '25", 0.60, 'Static'],
     ["Q1 '26", 0.32, 'Static'],
-    ["Q2 '26", q2_26, ''],
+    [currentQLabel, currentQ, ''],
     ["Target '26", 0.65, 'Static'],
   ];
 
