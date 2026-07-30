@@ -937,7 +937,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp - bump on every release. Rendered into the header badge so the
 // running copy identifies itself; without it a stale download is undetectable.
-window.PRP_BUILD = '2026-07-30.2';
+window.PRP_BUILD = '2026-07-30.3';
 (function () {
   var el = document.getElementById('prp-build');
   if (el) el.textContent = 'build ' + window.PRP_BUILD;
@@ -4685,6 +4685,11 @@ function _themeChartConfig(cfg) {
   const firstX = (cfg.traces || []).length ? cfg.traces[0].x : null;
   const base = _baseLayout(titleText, Array.isArray(firstX) ? firstX : null);
   const layout = Object.assign({}, base, { bargap:0.22, bargroupgap:0.06 });
+  // Horizontal bars carry their category labels on the y axis; the base
+  // 48px left margin truncates them ("eline '25"), so widen it.
+  if ((cfg.traces || []).some(function(t) { return t.orientation === "h"; })) {
+    layout.margin = Object.assign({}, layout.margin, { l: 110 });
+  }
   if (src.barmode) layout.barmode = src.barmode;
   if (src.showlegend !== undefined) layout.showlegend = src.showlegend;
   layout.xaxis = _themeAxis(src.xaxis, base.xaxis);
