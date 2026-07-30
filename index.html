@@ -922,7 +922,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp - bump on every release. No longer shown in the header (badges
 // removed by request); check it via PRP_BUILD in the browser console.
-window.PRP_BUILD = '2026-07-30.9';
+window.PRP_BUILD = '2026-07-30.10';
 
 // ── Inlined: report-engine.js ─────────────────────────────────────────────
 window.Reports = window.Reports || {};
@@ -2432,29 +2432,45 @@ window.Reports.d2 = async function d2(wb, opts) {
     : financeNames.length
       ? 'Finance filter: names were given but no Respondents column was found - fell back to Tags == "cyber" (' + recordTotal + ' rows).'
       : 'Finance filter: Tags column (Tags == "cyber") - ' + recordTotal + ' rows.';
-  // Quarter KPI bars: Q1 stays static; Q2/Q3/Q4 are each computed from their
-  // own months' rows (Date created: Q2 Apr-Jun, Q3 Jul-Sep, Q4 Oct-Dec) as
-  // that quarter's Closed / Total. A quarter's bar appears only once its
-  // months hold processed data - July rows ADD a Q3 bar, Q2 keeps its own.
-  var qStats = { 2: { closed: 0, total: 0 }, 3: { closed: 0, total: 0 }, 4: { closed: 0, total: 0 } };
+  // Quarter KPI bars with month roll-up (mirrors Diagram 4's display rule):
+  // Q1 stays static. A quarter shows as ONE "Q# '26" bar only once it is
+  // COMPLETE - its ending month has data (Jun->Q2, Sep->Q3, Dec->Q4),
+  // computed as that quarter's Closed / Total. Until then the quarter's
+  // months appear individually: July-only data yields a "Jul '26" bar
+  // beside the finished Q2, not a premature Q3.
+  var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var mStats = {}; // month (4-12) -> { closed, total }; Q1 months stay static
   filtered.forEach(function (r) {
     var d = E.excelDateInfo(r['Date created']);
-    if (!d) return;
-    var q = Math.floor((d.month - 1) / 3) + 1;
-    if (!qStats[q]) return;
-    qStats[q].total++;
-    if (r['Final Stage'] === 'Closed') qStats[q].closed++;
+    if (!d || d.month < 4) return;
+    var s = mStats[d.month] || (mStats[d.month] = { closed: 0, total: 0 });
+    s.total++;
+    if (r['Final Stage'] === 'Closed') s.closed++;
   });
   var KPI = [
     ["Baseline '25", 0.60, 'Static'],
     ["Q1 '26", 0.32, 'Static'],
   ];
   var qNotes = [];
+  function pushRate(label, closed, total) {
+    KPI.push([label, Math.round((closed / total) * 100) / 100, '']);
+    qNotes.push(label.replace(" '26", '') + ': ' + closed + ' / ' + total);
+  }
   [2, 3, 4].forEach(function (q) {
-    var s = qStats[q];
-    if (!s.total) return;
-    KPI.push(['Q' + q + " '26", Math.round((s.closed / s.total) * 100) / 100, '']);
-    qNotes.push('Q' + q + ': ' + s.closed + ' / ' + s.total);
+    var months = [q * 3 - 2, q * 3 - 1, q * 3];
+    if (mStats[q * 3]) { // quarter complete: ending month has data
+      var closed = 0, total = 0;
+      months.forEach(function (m) {
+        var s = mStats[m];
+        if (s) { closed += s.closed; total += s.total; }
+      });
+      pushRate('Q' + q + " '26", closed, total);
+    } else { // in progress: each month with data gets its own bar
+      months.forEach(function (m) {
+        var s = mStats[m];
+        if (s) pushRate(MONTH_ABBR[m - 1] + " '26", s.closed, s.total);
+      });
+    }
   });
   KPI.push(["Target '26", 0.65, 'Static']);
 
