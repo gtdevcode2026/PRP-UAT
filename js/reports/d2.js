@@ -5,8 +5,8 @@
 // itself when unmapped - unlike s2a/s3d's zone_map, "Europe" stays
 // "Europe" here, not "EUR"), pivots Org Display x Final Stage (count, no
 // margins), sorts to a fixed zone order, appends a Grand Total row, and
-// computes a small KPI panel (3 static values + 1 computed current-quarter
-// rate, labeled from today's date per D2.py's current_quarter_label).
+// computes a small KPI panel (static Baseline/Q1/Target plus one computed
+// bar per quarter that has data - Q2 Apr-Jun, Q3 Jul-Sep, Q4 Oct-Dec).
 // Writes "output file D2.xlsx" as a single hand-built "Dashboard" sheet
 // (filter area, then the pivot table, then the KPI table below it) - the
 // exact row offsets matter because the existing preview pipeline re-treats
@@ -111,17 +111,31 @@ window.Reports.d2 = async function d2(wb, opts) {
     : financeNames.length
       ? 'Finance filter: names were given but no Respondents column was found - fell back to Tags == "cyber" (' + recordTotal + ' rows).'
       : 'Finance filter: Tags column (Tags == "cyber") - ' + recordTotal + ' rows.';
-  // current_quarter_label (D2.py): the computed KPI row carries the CURRENT
-  // quarter - Jan-Mar Q1, Apr-Jun Q2, Jul-Sep Q3, Oct-Dec Q4 (year fixed at
-  // '26) - so the label advances by itself every three months.
-  var currentQLabel = 'Q' + (Math.floor(new Date().getMonth() / 3) + 1) + " '26";
-  var currentQ = recordTotal ? Math.round((closedTotal / recordTotal) * 100) / 100 : 0;
+  // Quarter KPI bars: Q1 stays static; Q2/Q3/Q4 are each computed from their
+  // own months' rows (Date created: Q2 Apr-Jun, Q3 Jul-Sep, Q4 Oct-Dec) as
+  // that quarter's Closed / Total. A quarter's bar appears only once its
+  // months hold processed data - July rows ADD a Q3 bar, Q2 keeps its own.
+  var qStats = { 2: { closed: 0, total: 0 }, 3: { closed: 0, total: 0 }, 4: { closed: 0, total: 0 } };
+  filtered.forEach(function (r) {
+    var d = E.excelDateInfo(r['Date created']);
+    if (!d) return;
+    var q = Math.floor((d.month - 1) / 3) + 1;
+    if (!qStats[q]) return;
+    qStats[q].total++;
+    if (r['Final Stage'] === 'Closed') qStats[q].closed++;
+  });
   var KPI = [
     ["Baseline '25", 0.60, 'Static'],
     ["Q1 '26", 0.32, 'Static'],
-    [currentQLabel, currentQ, ''],
-    ["Target '26", 0.65, 'Static'],
   ];
+  var qNotes = [];
+  [2, 3, 4].forEach(function (q) {
+    var s = qStats[q];
+    if (!s.total) return;
+    KPI.push(['Q' + q + " '26", Math.round((s.closed / s.total) * 100) / 100, '']);
+    qNotes.push('Q' + q + ': ' + s.closed + ' / ' + s.total);
+  });
+  KPI.push(["Target '26", 0.65, 'Static']);
 
   function setCell(grid, row1, col1, value) {
     var r = row1 - 1, c = col1 - 1;
@@ -154,8 +168,8 @@ window.Reports.d2 = async function d2(wb, opts) {
     setCell(grid, rowNum, 3, k[2]);
   });
   var noteRow = kpiStartRow + KPI.length + 2;
-  setCell(grid, noteRow, 1, 'Q2 formula');
-  setCell(grid, noteRow, 2, 'Closed / Grand Total = ' + closedTotal + ' / ' + recordTotal);
+  setCell(grid, noteRow, 1, 'Quarter formula');
+  setCell(grid, noteRow, 2, 'Closed / Total per quarter = ' + (qNotes.length ? qNotes.join(', ') : 'no quarter data yet'));
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
 
