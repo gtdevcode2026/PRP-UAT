@@ -632,8 +632,8 @@ body > * { position: relative; z-index: var(--z-base); }
 .panel-title { font-size: var(--fs-lg); font-weight: 700; color: var(--tx-hi); letter-spacing: -0.012em; line-height: 1.25; }
 .panel-meta { font-size: var(--fs-xs); color: var(--tx-mute); }
 .chart-box { flex: 1; min-height: 280px; }
-.chart-box-wide { min-height: 460px; }
-@media (max-width: 720px) { .chart-box-wide { min-height: 340px; } }
+.chart-box-wide { min-height: 360px; }
+@media (max-width: 720px) { .chart-box-wide { min-height: 280px; } }
 
 /* ── TABLES ── */
 .data-table-wrap {
@@ -922,7 +922,7 @@ hr, .output-divider { border: none; border-top: 1px solid var(--hairline-2); mar
 <script>
 // Build stamp - bump on every release. No longer shown in the header (badges
 // removed by request); check it via PRP_BUILD in the browser console.
-window.PRP_BUILD = '2026-07-30.6';
+window.PRP_BUILD = '2026-07-30.7';
 
 // ── Inlined: report-engine.js ─────────────────────────────────────────────
 window.Reports = window.Reports || {};
