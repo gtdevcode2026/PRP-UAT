@@ -185,56 +185,35 @@ window.Reports.s2a = async function s2a(wb) {
     ],
   }];
 
-  // Embedded charts reproduce the original matplotlib style exactly (white
-  // background, blue "Closed" + orange "Open" stacked bars, white in-bar
-  // value labels, bold total label above each bar, bottom legend, dashed
-  // gridlines) instead of the light in-page preview theme. Both charts are
-  // embedded into the file (matching today's 2-chart-per-file output) even
-  // though the preview only ever surfaces the first one - confirmed with
-  // the user as the intended behavior, not a bug to fix.
-  function s2aChartTraces(zoneArr) {
-    var zones = zoneArr.map(function (z) { return z.zone; });
-    var closedVals = zoneArr.map(function (z) { return z.closed; });
-    var openVals = zoneArr.map(function (z) { return z.open; });
-    var totals = zoneArr.map(function (z) { return z.closed + z.open; });
-    return {
-      zones: zones, totals: totals,
-      traces: [
-        { x: zones, y: closedVals, type: 'bar', name: 'Closed', marker: { color: '#2F75B5' },
-          text: closedVals.map(function (v) { return v > 0 ? String(v) : ''; }),
-          textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none', textfont: { color: '#ffffff', size: 14 } },
-        { x: zones, y: openVals, type: 'bar', name: 'Open', marker: { color: '#ED7D31' },
-          text: openVals.map(function (v) { return v > 0 ? String(v) : ''; }),
-          textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none', textfont: { color: '#ffffff', size: 14 } },
-      ],
-    };
-  }
-  function s2aLayout(title, yTitle, zones, totals) {
-    var maxTotal = Math.max.apply(null, totals.concat([1]));
-    return {
-      barmode: 'stack',
-      paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',
-      title: { text: '<b>' + title + '</b>', font: { color: '#000000', size: 14 } },
-      xaxis: { title: 'Zone', tickfont: { color: '#000000' } },
-      yaxis: { title: yTitle, gridcolor: 'rgba(0,0,0,0.3)', griddash: 'dash', range: [0, maxTotal * 1.2] },
-      legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.25, font: { color: '#000000' } },
-      annotations: zones.map(function (z, i) {
-        return totals[i] > 0
-          ? { x: z, y: totals[i], text: String(totals[i]), showarrow: false, yshift: 12, font: { color: '#000000', size: 9 } }
-          : null;
-      }).filter(Boolean),
-      margin: { t: 60, r: 20, b: 90, l: 60 },
-    };
-  }
-  // Live Plotly preview of the same styled chart (no baked image). Only the
-  // 'Auto Open Closed' sheet previews a chart - matching what the preview
-  // always showed; the Overdue sheet's chart lives in the Excel file only.
+  // Live Plotly preview of the 'Auto Open Closed' chart, mirroring the
+  // embedded native chart: Grand Total (blue) beside Open (orange) per zone,
+  // grouped bars - Closed stays in the table but is not charted. Only this
+  // sheet previews a chart; the Overdue sheet's chart lives in the Excel
+  // file only, matching what the preview always showed.
   var chartConfigs = {};
-  var oc = s2aChartTraces(zoneSummary);
-  chartConfigs['Auto Open Closed'] = {
-    traces: oc.traces,
-    layout: s2aLayout(totalOpen + '/' + totalAll + ' Open Assessment', 'Assessment Count', oc.zones, oc.totals),
-  };
+  (function () {
+    var zones = zoneSummary.map(function (z) { return z.zone; });
+    var totals = zoneSummary.map(function (z) { return z.grandTotal; });
+    var opens = zoneSummary.map(function (z) { return z.open; });
+    function bar(name, vals, color) {
+      return { x: zones, y: vals, type: 'bar', name: name, marker: { color: color },
+        text: vals.map(function (v) { return v > 0 ? String(v) : ''; }),
+        textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none',
+        textfont: { color: '#ffffff', size: 14 } };
+    }
+    chartConfigs['Auto Open Closed'] = {
+      traces: [bar('Grand Total', totals, '#2F75B5'), bar('Open', opens, '#ED7D31')],
+      layout: {
+        barmode: 'group',
+        paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',
+        title: { text: '<b>' + totalOpen + '/' + totalAll + ' Open Assessment</b>', font: { color: '#000000', size: 14 } },
+        xaxis: { title: 'Zone', tickfont: { color: '#000000' } },
+        yaxis: { title: 'Assessment Count', gridcolor: 'rgba(0,0,0,0.3)', griddash: 'dash' },
+        legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.25, font: { color: '#000000' } },
+        margin: { t: 60, r: 20, b: 90, l: 60 },
+      },
+    };
+  })();
 
   var workbook = new ExcelJS.Workbook();
   function writeSheet(name, grid) {
@@ -247,39 +226,41 @@ window.Reports.s2a = async function s2a(wb) {
   var ws2 = writeSheet('Auto Open Closed', g2);
   var ws3 = writeSheet(sheetName3, g3);
 
-  // Native, editable stacked charts (data-linked to hidden helper blocks)
-  // replace the two baked PNGs. The Open/Closed chart stacks Closed (blue) +
-  // Open (orange); the Overdue chart plots OPEN overdue only - an overdue
-  // assessment that is already closed is not charted there.
+  // Native, editable charts (data-linked to hidden helper blocks) replace
+  // the two baked PNGs. The Open Assessment chart puts Grand Total (blue)
+  // beside Open (orange), clustered - Closed is not charted; the Overdue
+  // chart plots OPEN overdue only - an overdue assessment that is already
+  // closed is not charted there.
   var placements = [];
   var R = window.NativeChartInject && window.NativeChartInject.ref;
   // headerRow: g2's zone table header is row 8 (data 9..), g3's is row 9 (data 10..).
-  // Zone labels sit in column A (editable there); B=Closed, C=Open.
-  function s2aPlacement(sheetName, zoneArr, title, headerRow, openOnly) {
+  // Zone labels sit in column A (editable there); B=Closed, C=Open, D=Grand Total.
+  function s2aPlacement(sheetName, zoneArr, title, headerRow, seriesSpec, grouping) {
     var zones = zoneArr.map(function (z) { return z.zone; });
     if (!zones.length) return;
     var first = headerRow + 1, last = headerRow + zones.length;
-    var series = [
-      { name: { lit: 'Closed' },
-        values: { ref: R(sheetName, 2, first, last), cache: zoneArr.map(function (z) { return z.closed; }) }, color: '2F75B5' },
-      { name: { lit: 'Open' },
-        values: { ref: R(sheetName, 3, first, last), cache: zoneArr.map(function (z) { return z.open; }) }, color: 'ED7D31' },
-    ];
-    if (openOnly) series = series.slice(1);
     placements.push({
       sheetName: sheetName, anchor: { fromCol: 5, fromRow: 1, toCol: 15, toRow: 20 }, // ~"F2"
       def: {
-        grouping: 'stacked', legend: true, title: title,
+        grouping: grouping, legend: true, title: title,
         axisColor: '000000', dataLabels: { position: 'ctr', color: 'FFFFFF' },
         categories: { ref: R(sheetName, 1, first, last), cache: zones },
-        series: series,
+        series: seriesSpec.map(function (s) {
+          return { name: { lit: s.name },
+            values: { ref: R(sheetName, s.col, first, last), cache: zoneArr.map(s.val) }, color: s.color };
+        }),
       },
     });
   }
   if (window.NativeChartInject && window.fflate) {
-    s2aPlacement('Auto Open Closed', zoneSummary, totalOpen + '/' + totalAll + ' Open Assessment', 8);
+    s2aPlacement('Auto Open Closed', zoneSummary, totalOpen + '/' + totalAll + ' Open Assessment', 8, [
+      { name: 'Grand Total', col: 4, val: function (z) { return z.grandTotal; }, color: '2F75B5' },
+      { name: 'Open', col: 3, val: function (z) { return z.open; }, color: 'ED7D31' },
+    ], 'clustered');
     s2aPlacement(sheetName3, overdueZone,
-      totalOverdueOpen + '/' + totalOverdue + ' Overdue Open Assessment (' + OVERDUE_THRESHOLD + '+ days)', 9, true);
+      totalOverdueOpen + '/' + totalOverdue + ' Overdue Open Assessment (' + OVERDUE_THRESHOLD + '+ days)', 9, [
+      { name: 'Open', col: 3, val: function (z) { return z.open; }, color: 'ED7D31' },
+    ], 'stacked');
   }
 
   var buf = await workbook.xlsx.writeBuffer();
