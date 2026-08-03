@@ -113,13 +113,14 @@ window.Reports.d2 = async function d2(wb, opts) {
     : financeNames.length
       ? 'Finance filter: names were given but no Respondents column was found - fell back to Tags == "cyber" (' + recordTotal + ' rows).'
       : 'Finance filter: Tags column (Tags == "cyber") - ' + recordTotal + ' rows.';
-  // KPI roll-up driven by TODAY's date, not by the data. Every month's rate
-  // is that month's Closed / Total (Date created). Quarters that have already
-  // ended show as ONE bar = the average of their months' rates (Q1 = avg of
-  // Jan/Feb/Mar); the quarter we are in shows each elapsed month as its own
-  // bar. So Feb renders Jan+Feb; May renders Q1, Apr, May; July renders
-  // Q1, Q2, Jul. Months/quarters with no rows are skipped rather than drawn
-  // as misleading 0% bars. Baseline and Target stay as static bookends.
+  // KPI roll-up driven by TODAY's date, not by the data. A month's value is
+  // the overall completion AS ON that month - Closed / Total across all rows
+  // created up to and including it - so the live bar always equals the pivot
+  // table's Closed / Grand Total, never just that single month's rows.
+  // Quarters that have already ended show as ONE bar = the average of their
+  // months' values; the quarter we are in shows each elapsed month as its
+  // own bar. So May renders Q1, Apr, May; July renders Q1, Q2, Jul.
+  // Baseline and Target stay as static bookends.
   var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var mStats = {}; // month 1-12 -> { closed, total }
   filtered.forEach(function (r) {
@@ -147,14 +148,24 @@ window.Reports.d2 = async function d2(wb, opts) {
     return null;
   }
   function writeLock(key, v) { try { localStorage.setItem(key, String(v)); } catch (e) {} }
-  // Rate for a FINISHED month: its saved lock first; else computed once from
+  // Overall completion as on month m: Closed / Total over every row created
+  // in or before it - the pivot's Closed / Grand Total seen from that month.
+  function cumThrough(m) {
+    var closed = 0, total = 0;
+    Object.keys(mStats).forEach(function (k) {
+      if (+k <= m) { closed += mStats[k].closed; total += mStats[k].total; }
+    });
+    return total ? { closed: closed, total: total } : null;
+  }
+  // Value for a FINISHED month: its saved lock first; else computed once from
   // this run's data and saved for good; null when there is nothing to go on.
   function finishedMonthRate(m) {
     var key = 'PRP_D2_KPI_' + MONTH_ABBR[m - 1] + '_26';
     var v = readLock(key);
     if (v !== null) return v;
-    if (!mStats[m]) return null;
-    v = Math.round((mStats[m].closed / mStats[m].total) * 100) / 100;
+    var c = cumThrough(m);
+    if (!c) return null;
+    v = Math.round((c.closed / c.total) * 100) / 100;
     writeLock(key, v);
     return v;
   }
@@ -185,9 +196,9 @@ window.Reports.d2 = async function d2(wb, opts) {
       if (mv === null) continue;
       KPI.push([MONTH_ABBR[m - 1] + " '26", mv, 'Static']);
       kpiNotes.push(MONTH_ABBR[m - 1] + ' locked at ' + Math.round(mv * 100) + '%');
-    } else if (mStats[m]) { // current month -> live
-      KPI.push([MONTH_ABBR[m - 1] + " '26", Math.round((mStats[m].closed / mStats[m].total) * 100) / 100, '']);
-      kpiNotes.push(MONTH_ABBR[m - 1] + ' = ' + mStats[m].closed + '/' + mStats[m].total + ' (live)');
+    } else if (recordTotal) { // current month -> live overall Closed / Grand Total
+      KPI.push([MONTH_ABBR[m - 1] + " '26", Math.round((closedTotal / recordTotal) * 100) / 100, '']);
+      kpiNotes.push(MONTH_ABBR[m - 1] + ' = ' + closedTotal + '/' + recordTotal + ' (live)');
     }
   }
   KPI.push(["Target '26", 0.65, 'Static']);
@@ -224,7 +235,7 @@ window.Reports.d2 = async function d2(wb, opts) {
   });
   var noteRow = kpiStartRow + KPI.length + 2;
   setCell(grid, noteRow, 1, 'KPI formula');
-  setCell(grid, noteRow, 2, 'Closed / Total per month; finished quarters average their months: ' +
+  setCell(grid, noteRow, 2, 'Closed / Grand Total as on each period; finished quarters average their months: ' +
     (kpiNotes.length ? kpiNotes.join(', ') : 'no month data yet'));
 
   var files = [{ name: 'output file D2.xlsx', sheets: [{ name: 'Dashboard', grid: grid }] }];
@@ -244,10 +255,12 @@ window.Reports.d2 = async function d2(wb, opts) {
   var orgTraces = [
     { x: orgLabels, y: openVals, type: 'bar', name: 'Open', marker: { color: '#00AEEF' }, width: 0.48,
       text: openVals.map(function (v) { return v > 0 ? String(v) : ''; }),
-      textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff', size: 10 } },
+      textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none',
+      textfont: { color: '#ffffff', size: 12 } },
     { x: orgLabels, y: closedVals, type: 'bar', name: 'Closed', marker: { color: '#D4AF37' }, width: 0.48,
       text: closedVals.map(function (v) { return v > 0 ? String(v) : ''; }),
-      textposition: 'inside', insidetextanchor: 'middle', textfont: { color: '#ffffff', size: 10 } },
+      textposition: 'inside', insidetextanchor: 'middle', textangle: 0, constraintext: 'none',
+      textfont: { color: '#ffffff', size: 12 } },
   ];
   var orgLayout = {
     barmode: 'stack',
@@ -265,10 +278,14 @@ window.Reports.d2 = async function d2(wb, opts) {
   // percent value labels to the right of each bar, dashed x gridlines.
   var kpiMetrics = KPI.map(function (k) { return k[0]; });
   var kpiValues = KPI.map(function (k) { return k[1]; });
+  // cliponaxis: false keeps the outside label of a 100% bar visible - the
+  // x axis is pinned at [0,1], so without it any label past the axis edge
+  // (and the bar's own 100% text) is silently clipped away.
   var kpiTraces = [
     { x: kpiValues, y: kpiMetrics, type: 'bar', orientation: 'h', marker: { color: '#4472C4' },
       text: kpiValues.map(function (v) { return Math.round(v * 100) + '%'; }),
-      textposition: 'outside', textfont: { color: '#000000', size: 11 } },
+      textposition: 'outside', textangle: 0, constraintext: 'none', cliponaxis: false,
+      textfont: { color: '#000000', size: 12 } },
   ];
   var kpiLayout = {
     paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',
@@ -277,7 +294,7 @@ window.Reports.d2 = async function d2(wb, opts) {
       gridcolor: 'rgba(0,0,0,0.35)', griddash: 'dash' },
     yaxis: { autorange: 'reversed' },
     showlegend: false,
-    margin: { t: 50, r: 40, b: 40, l: 90 },
+    margin: { t: 50, r: 70, b: 40, l: 90 },
   };
   images.kpi = await B.renderStyledPng(kpiTraces, kpiLayout, 560, 300);
 

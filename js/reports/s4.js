@@ -299,29 +299,41 @@ window.Reports.s4 = async function s4(wb) {
   var eligibleHistory = sortedHistory.filter(function (r) { return periodSortKey(r.Month) <= currentKey; });
 
   // Quarter roll-up (reference workflow steps 17-20): history keeps MONTHLY
-  // rows, but a completed quarter displays as ONE column. A quarter is
-  // complete when its ENDING month's row exists (Q2 <- Jun, Q3 <- Sep,
-  // Q4 <- Dec), and the quarter shows that ending month's numbers - a
-  // snapshot, not a sum, because these are cumulative as-on-date values.
-  // Months of an incomplete quarter stay individual, so the display runs
-  // "Q1, Q2, Jul, Aug" until September collapses it to "Q1, Q2, Q3". Q1
-  // needs no month handling: March is stored as "Q1 '26" at derivation
-  // time (getPeriodLabel), as is the seed row.
+  // rows, but a completed quarter displays as ONE column. Same calendar rule
+  // as Diagram 2's KPI panel: a quarter consolidates only once TODAY's date
+  // has moved past it - the running quarter's months always stay individual,
+  // so during August the display runs "Q1, Q2, Jul, Aug" and September 30
+  // passing collapses it to "Q1, Q2, Q3". A completed quarter's column is
+  // the AVERAGE of its stored month rows (counts rounded, Closed % averaged
+  // as Diagram 2 averages its months). Values themselves are already static:
+  // a saved history month is never overwritten by a re-run. Q1 needs no
+  // month handling: March is stored as "Q1 '26" at derivation time
+  // (getPeriodLabel), as is the seed row.
   function rollupDisplay(rows) {
     var QUARTER_OF = { 4: 'Q2', 5: 'Q2', 6: 'Q2', 7: 'Q3', 8: 'Q3', 9: 'Q3', 10: 'Q4', 11: 'Q4', 12: 'Q4' };
-    var QUARTER_END = { 6: 'Q2', 9: 'Q3', 12: 'Q4' };
     function isMonthLabel(l) { return /^[A-Za-z]{3}/.test(String(l)); }
-    var endingRow = {};
+    var nowMonth = new Date().getMonth() + 1;
+    var nowQuarter = Math.floor((nowMonth - 1) / 3) + 1;
+    var byQuarter = {};
     rows.forEach(function (r) {
       if (!isMonthLabel(r.Month)) return;
-      var q = QUARTER_END[periodSortKey(r.Month)];
-      if (q) endingRow[q] = r;
+      var q = QUARTER_OF[periodSortKey(r.Month)];
+      if (!q || +q.charAt(1) >= nowQuarter) return; // running/future quarter: months stay
+      (byQuarter[q] = byQuarter[q] || []).push(r);
     });
+    function avgRow(monthRows) {
+      var out = {};
+      ['Open risk as on date', 'Closed Risk in 2026', 'Total Risk', 'Risk Created in 2026'].forEach(function (c) {
+        out[c] = Math.round(monthRows.reduce(function (a, r) { return a + (+r[c] || 0); }, 0) / monthRows.length);
+      });
+      out['Closed %'] = monthRows.reduce(function (a, r) { return a + (+r['Closed %'] || 0); }, 0) / monthRows.length;
+      return out;
+    }
     var out = [], emitted = {};
     rows.forEach(function (r) {
       var q = isMonthLabel(r.Month) ? QUARTER_OF[periodSortKey(r.Month)] : null;
-      if (q && endingRow[q]) {
-        if (!emitted[q]) { emitted[q] = 1; out.push({ label: q + " '26", row: endingRow[q] }); }
+      if (q && byQuarter[q]) {
+        if (!emitted[q]) { emitted[q] = 1; out.push({ label: q + " '26", row: avgRow(byQuarter[q]) }); }
         return; // month absorbed into its completed quarter
       }
       out.push({ label: String(r.Month), row: r });
